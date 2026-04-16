@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+{% set active_page = "test" %}
+{% block title %}Lead testen{% endblock %}
+{% block page_title %}Lead-Pipeline testen{% endblock %}
+{% block page_subtitle %}Sende einen Test-Lead und verfolge die Pipeline in Echtzeit{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+  <!-- ── FORMULAR ── -->
+  <div class="glass rounded-xl p-6">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:rgba(34,197,94,0.15);">
+        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+      </div>
+      <div>
+        <h2 class="text-sm font-semibold text-white">Test-Lead senden</h2>
+        <p class="text-xs text-gray-500">POST → /webhook/lead</p>
+      </div>
+    </div>
+
+    <!-- Quick-Fill Buttons -->
+    <div class="flex flex-wrap gap-2 mb-4">
+      <p class="w-full text-xs text-gray-500 mb-1">Schnell-Vorlagen:</p>
+      <button onclick="fillTemplate('ceo')"
+        class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-80"
+        style="background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.25);">
+        CEO / Entscheider
+      </button>
+      <button onclick="fillTemplate('marketing')"
+        class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-80"
+        style="background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.25);">
+        Marketing-Leiter
+      </button>
+      <button onclick="fillTemplate('praktikant')"
+        class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-80"
+        style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.25);">
+        Praktikant (niedrig)
+      </button>
+    </div>
+
+    <form id="lead-form" class="space-y-4">
+      <!-- Name + Email -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1.5">Vollständiger Name *</label>
+          <input id="f-name" type="text" placeholder="Max Mustermann" required
+            class="form-input w-full px-3 py-2.5 rounded-lg text-sm text-gray-100 placeholder-gray-600 transition-all"
+            style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1.5">E-Mail *</label>
+          <input id="f-email" type="email" placeholder="max@firma.de" required
+            class="form-input w-full px-3 py-2.5 rounded-lg text-sm text-gray-100 placeholder-gray-600 transition-all"
+            style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);" />
+        </div>
+      </div>
+
+      <!-- Firma -->
+      <div>
+        <label class="block text-xs font-medium text-gray-400 mb-1.5">Firmenname *</label>
+        <input id="f-company" type="text" placeholder="Muster GmbH" required
+          class="form-input w-full px-3 py-2.5 rounded-lg text-sm text-gray-100 placeholder-gray-600 transition-all"
+          style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);" />
+      </div>
+
+      <!-- Nachricht -->
+      <div>
+        <label class="block text-xs font-medium text-gray-400 mb-1.5">Nachricht *</label>
+        <textarea id="f-message" rows="4" placeholder="Beschreiben Sie Ihr Anliegen..." required
+          class="form-input w-full px-3 py-2.5 rounded-lg text-sm text-gray-100 placeholder-gray-600 transition-all resize-none"
+          style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);"></textarea>
+      </div>
+
+      <!-- Submit -->
+      <button type="submit" id="submit-btn"
+        class="w-full py-3 rounded-lg text-sm font-semibold text-white transition-all"
+        style="background:linear-gradient(135deg,#22c55e,#16a34a);">
+        <span id="submit-text">Pipeline starten →</span>
+        <span id="submit-spinner" class="hidden">
+          <svg class="w-4 h-4 inline animate-spin mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+          Verarbeite…
+        </span>
+      </button>
+    </form>
+  </div>
+
+  <!-- ── PIPELINE VISUALIZER ── -->
+  <div class="glass rounded-xl p-6">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:rgba(168,85,247,0.15);">
+        <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      </div>
+      <div>
+        <h2 class="text-sm font-semibold text-white">Pipeline-Visualisierung</h2>
+        <p class="text-xs text-gray-500" id="pipeline-status-text">Bereit — warte auf Lead</p>
+      </div>
+    </div>
+
+    <!-- Agent-Steps -->
+    <div class="space-y-2" id="pipeline-steps">
+
+      <div class="pipeline-step" id="step-orchestrator">
+        <div class="flex items-center gap-3 p-3 rounded-lg transition-all" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05);">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold step-icon" style="background:rgba(34,197,94,0.1);color:#6b7280;">O</div>
+          <div class="flex-1">
+            <p class="text-xs font-medium text-gray-300">OrchestratorAgent</p>
+            <p class="text-xs text-gray-600 step-msg">Wartet…</p>
+          </div>
+          <span class="step-badge text-xs px-2 py-0.5 rounded-full" style="background:rgba(255,255,255,0.05);color:#6b7280;">—</span>
+        </div>
+      </div>
+
+      <div class="flex gap-2">
+        <div class="pipeline-step flex-1" id="step-research">
+          <div class="flex items-center gap-2 p-3 rounded-lg transition-all" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05);">
+            <div class="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold step-icon" style="background:rgba(59,130,246,0.1);color:#6b7280;">R</div>
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-medium text-gray-300 truncate">Research</p>
+              <p class="text-xs text-gray-600 step-msg truncate">Wartet…</p>
+            </div>
+          </div>
+        </div>
+        <div class="pipeline-step flex-1" id="step-scoring">
+          <div class="flex items-center gap-2 p-3 rounded-lg transition-all" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05);">
+            <div class="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold step-icon" style="background:rgba(234,179,8,0.1);color:#6b7280;">S</div>
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-medium text-gray-300 truncate">Scoring</p>
+              <p class="text-xs text-gray-600 step-msg truncate">Wartet…</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipeline-step" id="step-writer">
+        <div class="flex items-center gap-3 p-3 rounded-lg transition-all" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05);">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold step-icon" style="background:rgba(168,85,247,0.1);color:#6b7280;">W</div>
+          <div class="flex-1">
+            <p class="text-xs font-medium text-gray-300">WriterAgent</p>
+            <p class="text-xs text-gray-600 step-msg">Wartet…</p>
+          </div>
+          <span class="step-badge text-xs px-2 py-0.5 rounded-full" style="background:rgba(255,255,255,0.05);color:#6b7280;">—</span>
+        </div>
+      </div>
+
+      <div class="pipeline-step" id="step-reviewer">
+        <div class="flex items-center gap-3 p-3 rounded-lg transition-all" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05);">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold step-icon" style="background:rgba(20,184,166,0.1);color:#6b7280;">V</div>
+          <div class="flex-1">
+            <p class="text-xs font-medium text-gray-300">ReviewerAgent</p>
+            <p class="text-xs text-gray-600 step-msg">Wartet…</p>
+          </div>
+          <span class="step-badge text-xs px-2 py-0.5 rounded-full" style="background:rgba(255,255,255,0.05);color:#6b7280;">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ergebnis-Box -->
+    <div id="result-box" class="mt-5 hidden">
+      <div class="rounded-xl p-4" id="result-inner">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl" id="result-icon">✅</div>
+          <div class="flex-1">
+            <p class="text-sm font-semibold text-white" id="result-title">Lead qualifiziert!</p>
+            <div class="flex items-center gap-3 mt-1">
+              <span class="text-xs text-gray-400">Score: <span class="font-mono font-bold" id="result-score">—</span>/10</span>
+              <span class="text-xs text-gray-600">·</span>
+              <span class="text-xs text-gray-400">Dauer: <span class="font-mono" id="result-duration">—</span>s</span>
+            </div>
+            <p class="text-xs text-gray-500 mt-2" id="result-lead-id"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Vorlagen
+  const templates = {
+    ceo: {
+      name: 'Thomas Berger',
+      email: 't.berger@digitalvision.de',
+      company: 'DigitalVision GmbH',
+      message: 'Ich bin Geschäftsführer der DigitalVision GmbH (150 Mitarbeiter, IT-Branche). Wir suchen eine Lösung zur automatischen Lead-Qualifizierung für unser Vertriebsteam. Budget ist geplant für Q2 2026. Zeitrahmen: Einführung bis Juni. Bitte um ein Erstgespräch.'
+    },
+    marketing: {
+      name: 'Sandra Koch',
+      email: 's.koch@marketingpro.de',
+      company: 'MarketingPro AG',
+      message: 'Hallo, ich leite das Marketing bei der MarketingPro AG. Wir haben gerade eine Investitionsrunde abgeschlossen und planen den Aufbau eines skalierbaren Lead-Prozesses. Würde gerne Ihr System testen und Kosten besprechen.'
+    },
+    praktikant: {
+      name: 'Jonas M.',
+      email: 'jonas.m2024@gmail.com',
+      company: 'Kleinbetrieb',
+      message: 'Hi, ich wollte mal fragen ob das was für uns sein könnte irgendwie.'
+    }
+  };
+
+  function fillTemplate(key) {
+    const t = templates[key];
+    document.getElementById('f-name').value = t.name;
+    document.getElementById('f-email').value = t.email;
+    document.getElementById('f-company').value = t.company;
+    document.getElementById('f-message').value = t.message;
+  }
+
+  // Step-Aktivierung
+  function activateStep(id, msg, color = '#22c55e') {
+    const step = document.getElementById(id);
+    if (!step) return;
+    const inner = step.querySelector('.flex');
+    const icon = step.querySelector('.step-icon');
+    const msgEl = step.querySelector('.step-msg');
+    const badge = step.querySelector('.step-badge');
+    if (inner) inner.style.borderColor = `rgba(${color === '#22c55e' ? '34,197,94' : color === '#3b82f6' ? '59,130,246' : '168,85,247'},0.3)`;
+    if (icon) icon.style.color = color;
+    if (msgEl) msgEl.textContent = msg;
+    if (badge) { badge.textContent = 'aktiv'; badge.style.background = `rgba(34,197,94,0.15)`; badge.style.color = '#4ade80'; }
+  }
+
+  function completeStep(id, msg) {
+    const step = document.getElementById(id);
+    if (!step) return;
+    const badge = step.querySelector('.step-badge');
+    const msgEl = step.querySelector('.step-msg');
+    if (msgEl) msgEl.textContent = msg;
+    if (badge) { badge.textContent = '✓'; badge.style.background = 'rgba(34,197,94,0.15)'; badge.style.color = '#4ade80'; }
+  }
+
+  function resetSteps() {
+    ['orchestrator','research','scoring','writer','reviewer'].forEach(s => {
+      const step = document.getElementById('step-' + s);
+      if (!step) return;
+      const inner = step.querySelector('.flex');
+      const icon = step.querySelector('.step-icon');
+      const msgEl = step.querySelector('.step-msg');
+      const badge = step.querySelector('.step-badge');
+      if (inner) inner.style.borderColor = 'rgba(255,255,255,0.05)';
+      if (icon) icon.style.color = '#6b7280';
+      if (msgEl) msgEl.textContent = 'Wartet…';
+      if (badge) { badge.textContent = '—'; badge.style.background = 'rgba(255,255,255,0.05)'; badge.style.color = '#6b7280'; }
+    });
+    document.getElementById('result-box').classList.add('hidden');
+    document.getElementById('pipeline-status-text').textContent = 'Bereit — warte auf Lead';
+  }
+
+  // Form Submit
+  document.getElementById('lead-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    resetSteps();
+
+    const btn = document.getElementById('submit-btn');
+    document.getElementById('submit-text').classList.add('hidden');
+    document.getElementById('submit-spinner').classList.remove('hidden');
+    btn.disabled = true;
+
+    const payload = {
+      name: document.getElementById('f-name').value.trim(),
+      email: document.getElementById('f-email').value.trim(),
+      company: document.getElementById('f-company').value.trim(),
+      message: document.getElementById('f-message').value.trim(),
+    };
+
+    // Animierte Pipeline-Steps simulieren
+    const delay = ms => new Promise(r => setTimeout(r, ms));
+
+    document.getElementById('pipeline-status-text').textContent = 'Pipeline läuft…';
+    activateStep('step-orchestrator', 'Lead validiert…');
+    await delay(600);
+    completeStep('step-orchestrator', 'Blackboard erstellt');
+
+    activateStep('step-research', 'Research läuft…');
+    activateStep('step-scoring', 'Scoring läuft…');
+
+    // API-Call
+    let result;
+    try {
+      const r = await fetch('/webhook/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      result = await r.json();
+    } catch(err) {
+      result = { success: false, error: 'Verbindungsfehler' };
+    }
+
+    await delay(400);
+    completeStep('step-research', 'Website analysiert');
+    completeStep('step-scoring', `Score: ${result.score || '—'}/10`);
+
+    activateStep('step-writer', 'E-Mail wird verfasst…', '#a855f7');
+    await delay(500);
+    completeStep('step-writer', result.email_type === 'qualify' ? 'Qualifizierungs-Mail' : 'Absage-Mail');
+
+    activateStep('step-reviewer', 'Qualitätsprüfung…', '#14b8a6');
+    await delay(400);
+    completeStep('step-reviewer', 'Review bestanden');
+
+    // Ergebnis zeigen
+    const box = document.getElementById('result-box');
+    const inner = document.getElementById('result-inner');
+    box.classList.remove('hidden');
+
+    if (result.success !== false && result.score >= 7) {
+      inner.style.background = 'rgba(21,128,61,0.15)';
+      inner.style.border = '1px solid rgba(34,197,94,0.3)';
+      document.getElementById('result-icon').textContent = '✅';
+      document.getElementById('result-title').textContent = 'Lead qualifiziert!';
+      document.getElementById('result-title').style.color = '#4ade80';
+      showToast(`Lead qualifiziert! Score: ${result.score}/10`, 'success');
+    } else if (result.error) {
+      inner.style.background = 'rgba(127,29,29,0.15)';
+      inner.style.border = '1px solid rgba(239,68,68,0.3)';
+      document.getElementById('result-icon').textContent = '⚠️';
+      document.getElementById('result-title').textContent = result.error;
+      document.getElementById('result-title').style.color = '#f87171';
+      showToast(result.error, 'error');
+    } else {
+      inner.style.background = 'rgba(127,29,29,0.1)';
+      inner.style.border = '1px solid rgba(239,68,68,0.25)';
+      document.getElementById('result-icon').textContent = '❌';
+      document.getElementById('result-title').textContent = 'Lead abgelehnt';
+      document.getElementById('result-title').style.color = '#f87171';
+      showToast(`Lead abgelehnt. Score: ${result.score || 0}/10`, 'info');
+    }
+
+    document.getElementById('result-score').textContent = result.score || '—';
+    document.getElementById('result-duration').textContent = result.duration_seconds?.toFixed(1) || '—';
+    if (result.lead_id) document.getElementById('result-lead-id').textContent = `Lead-ID: ${result.lead_id}`;
+
+    document.getElementById('pipeline-status-text').textContent = 'Pipeline abgeschlossen';
+    document.getElementById('submit-text').classList.remove('hidden');
+    document.getElementById('submit-spinner').classList.add('hidden');
+    btn.disabled = false;
+  });
+</script>
+{% endblock %}

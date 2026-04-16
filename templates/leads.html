@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% set active_page = "leads" %}
+{% block title %}Leads{% endblock %}
+{% block page_title %}Lead-Verwaltung{% endblock %}
+{% block page_subtitle %}Alle verarbeiteten Leads mit Scoring-Details{% endblock %}
+
+{% block content %}
+
+<!-- Filter-Bar -->
+<div class="flex flex-wrap items-center gap-3 mb-5">
+  <div class="flex items-center gap-2 px-3 py-2 rounded-lg" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
+    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+    <input id="search-input" type="text" placeholder="Firma suchen…" class="bg-transparent text-sm text-gray-200 placeholder-gray-600 outline-none w-48"/>
+  </div>
+
+  <div class="flex gap-2">
+    <button onclick="filterLeads('all')" id="filter-all"
+      class="filter-btn px-3 py-2 rounded-lg text-xs font-medium transition-all active-filter"
+      style="background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.3);">
+      Alle
+    </button>
+    <button onclick="filterLeads('qualify')" id="filter-qualify"
+      class="filter-btn px-3 py-2 rounded-lg text-xs font-medium transition-all"
+      style="background:rgba(255,255,255,0.04);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);">
+      Qualifiziert
+    </button>
+    <button onclick="filterLeads('reject')" id="filter-reject"
+      class="filter-btn px-3 py-2 rounded-lg text-xs font-medium transition-all"
+      style="background:rgba(255,255,255,0.04);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);">
+      Abgelehnt
+    </button>
+  </div>
+
+  <span class="ml-auto text-xs text-gray-500" id="leads-count-label">0 Leads</span>
+</div>
+
+<!-- Tabelle -->
+<div class="glass rounded-xl overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr style="background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.06);">
+          <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Lead-ID</th>
+          <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Firma</th>
+          <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Score</th>
+          <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+          <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Mail gesendet</th>
+          <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Dauer</th>
+          <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Zeitpunkt</th>
+        </tr>
+      </thead>
+      <tbody id="all-leads-tbody">
+        <tr>
+          <td colspan="7" class="px-5 py-16 text-center">
+            <div class="flex flex-col items-center gap-3 text-gray-600">
+              <svg class="w-12 h-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+              <p class="text-sm">Keine Leads gefunden</p>
+              <a href="/test-webhook" class="text-xs text-green-500 hover:text-green-400">→ Test-Lead senden</a>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let allLeads = [];
+  let currentFilter = 'all';
+
+  function scoreBadge(score) {
+    const cls = score >= 7 ? 'score-high' : score >= 5 ? 'score-mid' : 'score-low';
+    const bar = Math.round((score / 10) * 100);
+    return `<div class="flex items-center gap-2">
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold ${cls}">${score}/10</span>
+      <div class="w-16 h-1 rounded-full bg-white/10"><div class="h-1 rounded-full ${score>=7?'bg-green-500':score>=5?'bg-yellow-500':'bg-red-500'}" style="width:${bar}%"></div></div>
+    </div>`;
+  }
+
+  function statusBadge(type) {
+    if (type === 'qualify')
+      return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium" style="background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.25);"><span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>Qualifiziert</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium" style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.25);"><span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>Abgelehnt</span>`;
+  }
+
+  function renderLeads(leads) {
+    const tbody = document.getElementById('all-leads-tbody');
+    document.getElementById('leads-count-label').textContent = `${leads.length} Lead${leads.length !== 1 ? 's' : ''}`;
+
+    if (leads.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" class="px-5 py-16 text-center text-gray-600 text-sm">Keine passenden Leads gefunden</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = leads.map(l => `
+      <tr class="table-row border-b border-white/5 transition-colors">
+        <td class="px-5 py-3.5 font-mono text-xs text-gray-500">${(l.lead_id||'—').slice(0,12)}…</td>
+        <td class="px-5 py-3.5 font-medium text-gray-200">${l.company || '—'}</td>
+        <td class="px-5 py-3.5">${scoreBadge(l.score || 0)}</td>
+        <td class="px-5 py-3.5">${statusBadge(l.email_type || 'reject')}</td>
+        <td class="px-5 py-3.5">
+          ${l.email_sent
+            ? '<span class="text-green-400 text-xs">✓ Gesendet</span>'
+            : '<span class="text-gray-600 text-xs">— nicht gesendet</span>'}
+        </td>
+        <td class="px-5 py-3.5 font-mono text-xs text-gray-400">${l.duration_seconds ? l.duration_seconds.toFixed(1)+'s' : '—'}</td>
+        <td class="px-5 py-3.5 text-xs text-gray-500">${l.created_at ? new Date(l.created_at).toLocaleString('de-DE') : '—'}</td>
+      </tr>
+    `).join('');
+  }
+
+  function filterLeads(type) {
+    currentFilter = type;
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.style.background = 'rgba(255,255,255,0.04)';
+      btn.style.color = '#9ca3af';
+      btn.style.borderColor = 'rgba(255,255,255,0.08)';
+    });
+    const active = document.getElementById('filter-' + type);
+    if (active) {
+      active.style.background = 'rgba(34,197,94,0.15)';
+      active.style.color = '#4ade80';
+      active.style.borderColor = 'rgba(34,197,94,0.3)';
+    }
+
+    const search = document.getElementById('search-input').value.toLowerCase();
+    let filtered = allLeads;
+    if (type !== 'all') filtered = filtered.filter(l => l.email_type === type);
+    if (search) filtered = filtered.filter(l => (l.company||'').toLowerCase().includes(search));
+    renderLeads(filtered);
+  }
+
+  document.getElementById('search-input').addEventListener('input', () => filterLeads(currentFilter));
+
+  async function loadLeads() {
+    try {
+      const r = await fetch('/api/leads/recent?limit=100');
+      const d = await r.json();
+      allLeads = d.leads || [];
+      filterLeads(currentFilter);
+    } catch(e) {}
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadLeads();
+    setInterval(loadLeads, 15000);
+  });
+</script>
+{% endblock %}

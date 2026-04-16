@@ -1,0 +1,614 @@
+{% extends "base.html" %}
+{% set active_page = "settings" %}
+{% block title %}Einstellungen{% endblock %}
+{% block page_title %}Einstellungen{% endblock %}
+{% block page_subtitle %}System-Konfiguration & Integrationen{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- ── Zeile 1: Lizenz | Erscheinungsbild ── -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- Lizenz-Status -->
+    <div class="glass rounded-xl p-6">
+      <h3 class="text-sm font-semibold text-white mb-5 flex items-center gap-2">
+        <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
+        Lizenz-Status
+      </h3>
+
+      <div id="license-card" class="rounded-xl p-4 mb-4" style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-lg font-bold text-green-400" id="lic-type">DEMO</span>
+          <span class="text-xs px-2.5 py-1 rounded-full font-medium" id="lic-status-badge" style="background:rgba(34,197,94,0.2);color:#4ade80;">Aktiv</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p class="text-xs text-gray-500 mb-0.5">Verbleibende Leads</p>
+            <p class="font-mono font-bold text-white" id="lic-leads">—</p>
+          </div>
+          <div>
+            <p class="text-xs text-gray-500 mb-0.5">Verbleibende Tage</p>
+            <p class="font-mono font-bold text-white" id="lic-days">—</p>
+          </div>
+        </div>
+        <div class="mt-3 h-2 rounded-full bg-white/10">
+          <div id="lic-progress" class="h-2 rounded-full progress-bar transition-all" style="width:100%"></div>
+        </div>
+      </div>
+
+      <div class="space-y-0 text-xs text-gray-500">
+        <div class="flex justify-between py-2 border-b border-white/5">
+          <span>Score-Threshold</span>
+          <span class="text-gray-300 font-mono" id="lic-threshold">7 / 10</span>
+        </div>
+        <div class="flex justify-between py-2">
+          <span>System-Status</span>
+          <span class="flex items-center gap-1.5 text-green-400"><span class="w-1.5 h-1.5 rounded-full dot-green"></span>Bereit</span>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-4 border-t border-white/5">
+        <p class="text-xs text-gray-500 mb-2 font-medium">Vollversion freischalten</p>
+        <div class="flex gap-2">
+          <input id="input-license-key" type="password" placeholder="Lizenzschlüssel eingeben…"
+            class="form-input flex-1 px-3 py-2 rounded-lg text-xs text-gray-200 placeholder-gray-600"
+            style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);" />
+          <button onclick="saveSingleKey('LICENSE_KEY','input-license-key')"
+            class="px-4 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-80"
+            style="background:linear-gradient(135deg,#22c55e,#16a34a);">
+            Aktivieren
+          </button>
+        </div>
+        <p class="mt-3 text-xs text-gray-500 text-center">
+          Vollversion auf Anfrage &mdash; Details auf
+          <a href="https://github.com/GhostVenumAI" target="_blank" rel="noopener" class="text-green-400 hover:underline">GitHub</a>
+        </p>
+      </div>
+    </div>
+
+    <!-- Erscheinungsbild & Sprache -->
+    <div class="glass rounded-xl p-6">
+      <h3 class="text-sm font-semibold text-white mb-5 flex items-center gap-2">
+        <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
+        Erscheinungsbild
+      </h3>
+
+      <!-- Theme Toggle -->
+      <div class="mb-5">
+        <p class="text-xs text-gray-500 mb-3 font-medium">Farbschema</p>
+        <div class="grid grid-cols-2 gap-3">
+
+          <!-- Dark -->
+          <button id="btn-dark" onclick="switchTheme('dark')"
+            class="theme-btn relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all"
+            style="border-color:rgba(34,197,94,0.5);background:rgba(34,197,94,0.06);">
+            <div class="w-full h-16 rounded-lg overflow-hidden border border-white/10" style="background:#0a0e1a;">
+              <div class="flex h-full">
+                <div class="w-1/4 h-full" style="background:#0f1629;"></div>
+                <div class="flex-1 p-2 space-y-1">
+                  <div class="h-2 rounded" style="background:rgba(255,255,255,0.1);"></div>
+                  <div class="h-2 rounded w-3/4" style="background:rgba(34,197,94,0.3);"></div>
+                  <div class="h-2 rounded w-1/2" style="background:rgba(255,255,255,0.06);"></div>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+              <span class="text-xs font-medium text-gray-300">Dunkel</span>
+            </div>
+            <span id="check-dark" class="absolute top-2 right-2 text-green-400">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            </span>
+          </button>
+
+          <!-- Light -->
+          <button id="btn-light" onclick="switchTheme('light')"
+            class="theme-btn relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all"
+            style="border-color:rgba(255,255,255,0.1);background:rgba(255,255,255,0.02);">
+            <div class="w-full h-16 rounded-lg overflow-hidden border border-gray-200" style="background:#f8fafc;">
+              <div class="flex h-full">
+                <div class="w-1/4 h-full" style="background:#ffffff; border-right:1px solid #e2e8f0;"></div>
+                <div class="flex-1 p-2 space-y-1">
+                  <div class="h-2 rounded" style="background:#e2e8f0;"></div>
+                  <div class="h-2 rounded w-3/4" style="background:rgba(34,197,94,0.4);"></div>
+                  <div class="h-2 rounded w-1/2" style="background:#f1f5f9;"></div>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+              <span class="text-xs font-medium text-gray-300">Hell</span>
+            </div>
+            <span id="check-light" class="absolute top-2 right-2 text-green-400 hidden">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Sprache -->
+      <div>
+        <p class="text-xs text-gray-500 mb-3 font-medium">Sprache / Language / Idioma</p>
+        <div class="grid grid-cols-3 gap-2">
+
+          <button onclick="switchLang('de')" id="btn-lang-de"
+            class="lang-btn flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border-2 transition-all"
+            style="border-color:rgba(34,197,94,0.5);background:rgba(34,197,94,0.06);">
+            <span class="text-2xl">🇩🇪</span>
+            <span class="text-xs font-medium text-gray-300">Deutsch</span>
+          </button>
+
+          <button onclick="switchLang('en')" id="btn-lang-en"
+            class="lang-btn flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border-2 transition-all"
+            style="border-color:rgba(255,255,255,0.1);background:rgba(255,255,255,0.02);">
+            <span class="text-2xl">🇬🇧</span>
+            <span class="text-xs font-medium text-gray-300">English</span>
+          </button>
+
+          <button onclick="switchLang('es')" id="btn-lang-es"
+            class="lang-btn flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border-2 transition-all"
+            style="border-color:rgba(255,255,255,0.1);background:rgba(255,255,255,0.02);">
+            <span class="text-2xl">🇪🇸</span>
+            <span class="text-xs font-medium text-gray-300">Español</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Zeile 2: API Keys ── -->
+  <div class="glass rounded-xl p-6">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+        <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+        API-Keys & Integrationen
+      </h3>
+      <span class="text-xs text-gray-500">Werte werden verschlüsselt in .env gespeichert</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <!-- Anthropic API Key -->
+      <div class="key-row rounded-xl p-4" style="background:rgba(168,85,247,0.05);border:1px solid rgba(168,85,247,0.15);">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold" style="background:rgba(168,85,247,0.2);color:#c084fc;">A</div>
+            <div>
+              <p class="text-xs font-semibold text-gray-200">Anthropic API Key</p>
+              <p class="text-xs text-gray-500">Claude AI · Pflichtfeld</p>
+            </div>
+          </div>
+          <span id="status-ANTHROPIC_API_KEY" class="text-xs px-2 py-0.5 rounded-full font-medium" style="background:rgba(239,68,68,0.15);color:#f87171;">Nicht gesetzt</span>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <input id="input-ANTHROPIC_API_KEY" type="password" placeholder="sk-ant-api03-…"
+            class="form-input flex-1 px-3 py-2 rounded-lg text-xs placeholder-gray-600 font-mono"
+            style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;" />
+          <button onclick="saveSingleKey('ANTHROPIC_API_KEY','input-ANTHROPIC_API_KEY')"
+            class="px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-80 flex-shrink-0"
+            style="background:rgba(168,85,247,0.3);border:1px solid rgba(168,85,247,0.4);">Speichern</button>
+        </div>
+      </div>
+
+      <!-- Slack Webhook -->
+      <div class="key-row rounded-xl p-4" style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold" style="background:rgba(99,102,241,0.2);color:#818cf8;">#</div>
+            <div>
+              <p class="text-xs font-semibold text-gray-200">Slack Webhook URL</p>
+              <p class="text-xs text-gray-500">Lead-Alerts · Optional</p>
+            </div>
+          </div>
+          <span id="status-SLACK_WEBHOOK_URL" class="text-xs px-2 py-0.5 rounded-full font-medium" style="background:rgba(239,68,68,0.15);color:#f87171;">Nicht gesetzt</span>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <input id="input-SLACK_WEBHOOK_URL" type="text" placeholder="https://hooks.slack.com/…"
+            class="form-input flex-1 px-3 py-2 rounded-lg text-xs placeholder-gray-600 font-mono"
+            style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;" />
+          <button onclick="saveSingleKey('SLACK_WEBHOOK_URL','input-SLACK_WEBHOOK_URL')"
+            class="px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-80 flex-shrink-0"
+            style="background:rgba(99,102,241,0.3);border:1px solid rgba(99,102,241,0.4);">Speichern</button>
+        </div>
+      </div>
+
+      <!-- Slack Encryption Key -->
+      <div class="key-row rounded-xl p-4" style="background:rgba(234,179,8,0.05);border:1px solid rgba(234,179,8,0.15);">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold" style="background:rgba(234,179,8,0.2);color:#fde047;">S</div>
+            <div>
+              <p class="text-xs font-semibold text-gray-200">Slack Encryption Key</p>
+              <p class="text-xs text-gray-500">AES-256-GCM · 32 Bytes Hex</p>
+            </div>
+          </div>
+          <span id="status-SLACK_ENCRYPTION_KEY" class="text-xs px-2 py-0.5 rounded-full font-medium" style="background:rgba(239,68,68,0.15);color:#f87171;">Nicht gesetzt</span>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <input id="input-SLACK_ENCRYPTION_KEY" type="password" placeholder="64-stelliger Hex-Key…"
+            class="form-input flex-1 px-3 py-2 rounded-lg text-xs placeholder-gray-600 font-mono"
+            style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;" />
+          <button onclick="saveSingleKey('SLACK_ENCRYPTION_KEY','input-SLACK_ENCRYPTION_KEY')"
+            class="px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-80 flex-shrink-0"
+            style="background:rgba(234,179,8,0.25);border:1px solid rgba(234,179,8,0.4);">Speichern</button>
+        </div>
+        <p class="text-xs text-gray-600 mt-2">Generieren:
+          <code class="font-mono text-yellow-500/70">python -c "import secrets; print(secrets.token_hex(32))"</code>
+        </p>
+      </div>
+
+      <!-- Gmail (Sender + App-Passwort) -->
+      <div class="key-row rounded-xl p-4 md:col-span-2" style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.15);">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold" style="background:rgba(59,130,246,0.2);color:#60a5fa;">@</div>
+            <div>
+              <p class="text-xs font-semibold text-gray-200">Gmail – E-Mail-Versand</p>
+              <p class="text-xs text-gray-500">SMTP mit App-Passwort · Optional</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="status-GMAIL_SENDER_EMAIL" class="text-xs px-2 py-0.5 rounded-full font-medium" style="background:rgba(239,68,68,0.15);color:#f87171;">Adresse fehlt</span>
+            <span id="status-GMAIL_APP_PASSWORD" class="text-xs px-2 py-0.5 rounded-full font-medium" style="background:rgba(239,68,68,0.15);color:#f87171;">Passwort fehlt</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-gray-500 mb-1 block">Absender-Adresse</label>
+            <div class="flex gap-2">
+              <input id="input-GMAIL_SENDER_EMAIL" type="email" placeholder="name@gmail.com"
+                class="form-input flex-1 px-3 py-2 rounded-lg text-xs placeholder-gray-600"
+                style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;" />
+              <button onclick="saveSingleKey('GMAIL_SENDER_EMAIL','input-GMAIL_SENDER_EMAIL')"
+                class="px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-80 flex-shrink-0"
+                style="background:rgba(59,130,246,0.3);border:1px solid rgba(59,130,246,0.4);">OK</button>
+            </div>
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 mb-1 block">App-Passwort (16 Zeichen)</label>
+            <div class="flex gap-2">
+              <input id="input-GMAIL_APP_PASSWORD" type="password" placeholder="xxxx xxxx xxxx xxxx"
+                class="form-input flex-1 px-3 py-2 rounded-lg text-xs placeholder-gray-600 font-mono"
+                style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;" />
+              <button onclick="saveSingleKey('GMAIL_APP_PASSWORD','input-GMAIL_APP_PASSWORD')"
+                class="px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-80 flex-shrink-0"
+                style="background:rgba(59,130,246,0.3);border:1px solid rgba(59,130,246,0.4);">OK</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 p-3 rounded-lg text-xs text-gray-500 space-y-1" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);">
+          <p class="font-medium text-gray-400">Setup in 3 Schritten:</p>
+          <p>1. Google-Konto → Sicherheit → <strong class="text-gray-300">2-Schritt-Verifizierung</strong> aktivieren</p>
+          <p>2. Google-Konto → Sicherheit → <strong class="text-gray-300">App-Passwörter</strong> → "Mail" → Generieren</p>
+          <p>3. Den 16-stelligen Code oben ohne Leerzeichen eintragen</p>
+        </div>
+      </div>
+
+      <!-- CRM Webhook -->
+      <div class="key-row rounded-xl p-4" style="background:rgba(20,184,166,0.05);border:1px solid rgba(20,184,166,0.15);">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold" style="background:rgba(20,184,166,0.2);color:#2dd4bf;">C</div>
+            <div>
+              <p class="text-xs font-semibold text-gray-200">CRM Webhook URL</p>
+              <p class="text-xs text-gray-500">HubSpot / Pipedrive · Optional</p>
+            </div>
+          </div>
+          <span id="status-CRM_WEBHOOK_URL" class="text-xs px-2 py-0.5 rounded-full font-medium" style="background:rgba(239,68,68,0.15);color:#f87171;">Nicht gesetzt</span>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <input id="input-CRM_WEBHOOK_URL" type="text" placeholder="https://api.hubapi.com/…"
+            class="form-input flex-1 px-3 py-2 rounded-lg text-xs placeholder-gray-600 font-mono"
+            style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;" />
+          <button onclick="saveSingleKey('CRM_WEBHOOK_URL','input-CRM_WEBHOOK_URL')"
+            class="px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-80 flex-shrink-0"
+            style="background:rgba(20,184,166,0.3);border:1px solid rgba(20,184,166,0.4);">Speichern</button>
+        </div>
+      </div>
+
+      <!-- Webhook Secret -->
+      <div class="key-row rounded-xl p-4" style="background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.15);">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold" style="background:rgba(239,68,68,0.2);color:#f87171;">W</div>
+            <div>
+              <p class="text-xs font-semibold text-gray-200">Webhook Secret</p>
+              <p class="text-xs text-gray-500">HMAC-SHA256 Signatur-Validierung</p>
+            </div>
+          </div>
+          <span id="status-WEBHOOK_SECRET" class="text-xs px-2 py-0.5 rounded-full font-medium" style="background:rgba(239,68,68,0.15);color:#f87171;">Nicht gesetzt</span>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <input id="input-WEBHOOK_SECRET" type="password" placeholder="Beliebiger sicherer String…"
+            class="form-input flex-1 px-3 py-2 rounded-lg text-xs placeholder-gray-600 font-mono"
+            style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;" />
+          <button onclick="saveSingleKey('WEBHOOK_SECRET','input-WEBHOOK_SECRET')"
+            class="px-3 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-80 flex-shrink-0"
+            style="background:rgba(239,68,68,0.25);border:1px solid rgba(239,68,68,0.4);">Speichern</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Zeile 3: Pipeline-Config | System-Info ── -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- Pipeline-Konfiguration -->
+    <div class="glass rounded-xl p-6">
+      <h3 class="text-sm font-semibold text-white mb-5 flex items-center gap-2">
+        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+        Pipeline-Konfiguration
+      </h3>
+
+      <!-- Qualify Threshold -->
+      <div class="mb-5">
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-xs text-gray-400 font-medium">Qualifizierungs-Schwellenwert</label>
+          <span id="threshold-display" class="text-sm font-bold text-green-400 font-mono">7 / 10</span>
+        </div>
+        <input id="threshold-slider" type="range" min="1" max="10" value="7"
+          oninput="updateThreshold(this.value)"
+          class="w-full h-2 rounded-lg appearance-none cursor-pointer"
+          style="background: linear-gradient(90deg, #22c55e 70%, rgba(255,255,255,0.1) 70%); accent-color: #22c55e;" />
+        <div class="flex justify-between text-xs text-gray-600 mt-1">
+          <span>1 (niedrig)</span>
+          <span>10 (hoch)</span>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">Leads mit Score ≥ Schwellenwert erhalten eine Qualifizierungs-E-Mail.</p>
+        <button onclick="saveThreshold()"
+          class="mt-3 w-full py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-80"
+          style="background:linear-gradient(135deg,#3b82f6,#2563eb);">
+          Schwellenwert speichern
+        </button>
+      </div>
+
+      <!-- Webhook Endpunkt -->
+      <div class="pt-4 border-t border-white/5">
+        <p class="text-xs font-medium text-gray-400 mb-2">Webhook-Endpunkt</p>
+        <div class="flex items-center gap-2 p-3 rounded-lg font-mono text-xs" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);">
+          <span class="px-1.5 py-0.5 rounded text-xs font-bold flex-shrink-0" style="background:rgba(34,197,94,0.2);color:#4ade80;">POST</span>
+          <span class="text-gray-300 flex-1 truncate" id="webhook-url-display">http://localhost:5000/webhook/lead</span>
+          <button onclick="copyWebhook()" class="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- System-Info -->
+    <div class="glass rounded-xl p-6">
+      <h3 class="text-sm font-semibold text-white mb-5 flex items-center gap-2">
+        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+        System-Information
+      </h3>
+
+      <div class="space-y-2">
+        {% set sysinfo = [
+          ('P','rgba(34,197,94,0.15)','#4ade80','Python','Backend Runtime','3.11+'),
+          ('F','rgba(59,130,246,0.15)','#60a5fa','Flask','Web Framework','3.0+'),
+          ('A','rgba(168,85,247,0.15)','#c084fc','Claude API','Anthropic · Multi-Agent','Sonnet + Opus'),
+          ('D','rgba(20,184,166,0.15)','#2dd4bf','SQLite','DSGVO-konform · Lokal','On-Premise'),
+        ] %}
+        {% for letter, bg, color, name, sub, ver in sysinfo %}
+        <div class="flex items-center justify-between p-3 rounded-lg" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold" style="background:{{ bg }};color:{{ color }};">{{ letter }}</div>
+            <div>
+              <p class="text-xs font-medium text-gray-200">{{ name }}</p>
+              <p class="text-xs text-gray-500">{{ sub }}</p>
+            </div>
+          </div>
+          <span class="text-xs font-mono text-gray-400">{{ ver }}</span>
+        </div>
+        {% endfor %}
+
+        <div class="flex items-center justify-between p-3 rounded-lg" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold" style="background:rgba(234,179,8,0.15);color:#fde047;">S</div>
+            <div>
+              <p class="text-xs font-medium text-gray-200">AES-256-GCM</p>
+              <p class="text-xs text-gray-500">Slack-Verschlüsselung</p>
+            </div>
+          </div>
+          <span class="flex items-center gap-1 text-xs text-green-400"><span class="w-1.5 h-1.5 rounded-full dot-green"></span>Aktiv</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // ── Lizenz laden ──────────────────────────────────────────────────────────
+  async function loadSettings() {
+    try {
+      const r = await fetch('/api/status');
+      const d = await r.json();
+      const lic = d.license;
+
+      document.getElementById('lic-type').textContent = lic.type.toUpperCase();
+      document.getElementById('lic-threshold').textContent = `${d.qualify_threshold} / 10`;
+
+      // Slider sync
+      const slider = document.getElementById('threshold-slider');
+      if (slider) {
+        slider.value = d.qualify_threshold;
+        updateThreshold(d.qualify_threshold);
+      }
+
+      if (lic.leads_remaining != null) {
+        document.getElementById('lic-leads').textContent = lic.leads_remaining;
+        const pct = Math.max(0, Math.min(100, (lic.leads_remaining / 10) * 100));
+        document.getElementById('lic-progress').style.width = pct + '%';
+      }
+      if (lic.days_remaining != null) {
+        document.getElementById('lic-days').textContent = lic.days_remaining;
+      }
+
+      if (!lic.active) {
+        const badge = document.getElementById('lic-status-badge');
+        badge.textContent = 'Abgelaufen';
+        badge.style.background = 'rgba(239,68,68,0.2)';
+        badge.style.color = '#f87171';
+      }
+    } catch(e) {}
+  }
+
+  // ── Konfiguration laden & Status-Badges setzen ────────────────────────────
+  async function loadConfig() {
+    try {
+      const r = await fetch('/api/settings/config');
+      const d = await r.json();
+      if (!d.success) return;
+
+      Object.entries(d.config).forEach(([key, maskedVal]) => {
+        const badge = document.getElementById(`status-${key}`);
+        if (!badge) return;
+        if (maskedVal) {
+          badge.textContent = maskedVal;
+          badge.style.background = 'rgba(34,197,94,0.15)';
+          badge.style.color = '#4ade80';
+        } else {
+          badge.textContent = 'Nicht gesetzt';
+          badge.style.background = 'rgba(239,68,68,0.15)';
+          badge.style.color = '#f87171';
+        }
+      });
+    } catch(e) {}
+  }
+
+  // ── Key speichern ─────────────────────────────────────────────────────────
+  async function saveSingleKey(envKey, inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const value = input.value.trim();
+    if (!value) { showToast('Bitte einen Wert eingeben.', 'error'); return; }
+
+    try {
+      const r = await fetch('/api/settings/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [envKey]: value }),
+      });
+      const d = await r.json();
+      if (d.success) {
+        input.value = '';
+        input.placeholder = '✓ Gespeichert — Seite neu laden zum Anzeigen';
+        showToast(`${envKey} erfolgreich gespeichert.`, 'success');
+        await loadConfig();
+      } else {
+        showToast(d.error || 'Fehler beim Speichern.', 'error');
+      }
+    } catch(e) {
+      showToast('Netzwerkfehler.', 'error');
+    }
+  }
+
+  // ── Threshold ─────────────────────────────────────────────────────────────
+  function updateThreshold(val) {
+    const v = parseInt(val);
+    document.getElementById('threshold-display').textContent = `${v} / 10`;
+    const slider = document.getElementById('threshold-slider');
+    if (slider) {
+      const pct = ((v - 1) / 9) * 100;
+      slider.style.background = `linear-gradient(90deg, #22c55e ${pct}%, rgba(255,255,255,0.1) ${pct}%)`;
+    }
+  }
+
+  async function saveThreshold() {
+    const val = document.getElementById('threshold-slider').value;
+    try {
+      const r = await fetch('/api/settings/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ QUALIFY_THRESHOLD: val }),
+      });
+      const d = await r.json();
+      if (d.success) {
+        showToast(`Score-Schwellenwert auf ${val} gesetzt.`, 'success');
+        document.getElementById('lic-threshold').textContent = `${val} / 10`;
+      } else {
+        showToast(d.error || 'Fehler.', 'error');
+      }
+    } catch(e) { showToast('Netzwerkfehler.', 'error'); }
+  }
+
+  // ── Theme ─────────────────────────────────────────────────────────────────
+  function switchTheme(theme) {
+    setTheme(theme);
+    const isDark = theme === 'dark';
+
+    const btnDark  = document.getElementById('btn-dark');
+    const btnLight = document.getElementById('btn-light');
+    const chkDark  = document.getElementById('check-dark');
+    const chkLight = document.getElementById('check-light');
+
+    btnDark.style.borderColor  = isDark  ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.1)';
+    btnDark.style.background   = isDark  ? 'rgba(34,197,94,0.06)' : 'rgba(255,255,255,0.02)';
+    btnLight.style.borderColor = !isDark ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.1)';
+    btnLight.style.background  = !isDark ? 'rgba(34,197,94,0.06)' : 'rgba(255,255,255,0.02)';
+
+    chkDark.classList.toggle('hidden',  !isDark);
+    chkLight.classList.toggle('hidden', isDark);
+
+    showToast(isDark ? 'Dunkles Theme aktiviert.' : 'Helles Theme aktiviert.', 'success', 2000);
+  }
+
+  // ── Sprache ───────────────────────────────────────────────────────────────
+  function switchLang(lang) {
+    setLang(lang);
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+      btn.style.borderColor = 'rgba(255,255,255,0.1)';
+      btn.style.background  = 'rgba(255,255,255,0.02)';
+    });
+    const active = document.getElementById(`btn-lang-${lang}`);
+    if (active) {
+      active.style.borderColor = 'rgba(34,197,94,0.5)';
+      active.style.background  = 'rgba(34,197,94,0.06)';
+    }
+    const names = { de: 'Deutsch', en: 'English', es: 'Español' };
+    showToast(`Sprache: ${names[lang] || lang}`, 'success', 2000);
+  }
+
+  // ── Webhook URL ───────────────────────────────────────────────────────────
+  function copyWebhook() {
+    const url = window.location.origin + '/webhook/lead';
+    document.getElementById('webhook-url-display').textContent = url;
+    navigator.clipboard.writeText(url);
+    showToast('Webhook-URL kopiert!', 'success', 2000);
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  function initThemeUI() {
+    const theme = localStorage.getItem('lq-theme') || 'dark';
+    switchTheme(theme);
+
+    const lang = localStorage.getItem('lq-lang') || 'de';
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+      btn.style.borderColor = 'rgba(255,255,255,0.1)';
+      btn.style.background  = 'rgba(255,255,255,0.02)';
+    });
+    const activeLang = document.getElementById(`btn-lang-${lang}`);
+    if (activeLang) {
+      activeLang.style.borderColor = 'rgba(34,197,94,0.5)';
+      activeLang.style.background  = 'rgba(34,197,94,0.06)';
+    }
+
+    // Webhook-URL dynamisch setzen
+    const wh = document.getElementById('webhook-url-display');
+    if (wh) wh.textContent = window.location.origin + '/webhook/lead';
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    initThemeUI();
+    loadSettings();
+    loadConfig();
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% set active_page = "dashboard" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Live-Übersicht aller Lead-Aktivitäten{% endblock %}
+
+{% block content %}
+
+<!-- ── KPI CARDS ── -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+
+  <!-- Gesamt Leads -->
+  <div class="glass rounded-xl p-4 animate-fade-in">
+    <div class="flex items-start justify-between">
+      <div>
+        <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Gesamt Leads</p>
+        <p class="text-3xl font-bold text-white mt-1" id="kpi-total">—</p>
+        <p class="text-xs text-gray-500 mt-1">heute verarbeitet</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:rgba(59,130,246,0.15);">
+        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Qualifiziert -->
+  <div class="glass rounded-xl p-4 animate-fade-in" style="animation-delay:0.05s">
+    <div class="flex items-start justify-between">
+      <div>
+        <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Qualifiziert</p>
+        <p class="text-3xl font-bold text-green-400 mt-1" id="kpi-qualified">—</p>
+        <p class="text-xs text-green-500/70 mt-1" id="kpi-qualified-pct">— % Rate</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:rgba(34,197,94,0.15);">
+        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Abgelehnt -->
+  <div class="glass rounded-xl p-4 animate-fade-in" style="animation-delay:0.1s">
+    <div class="flex items-start justify-between">
+      <div>
+        <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Abgelehnt</p>
+        <p class="text-3xl font-bold text-red-400 mt-1" id="kpi-rejected">—</p>
+        <p class="text-xs text-gray-500 mt-1" id="kpi-rejected-pct">— % Rate</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:rgba(239,68,68,0.15);">
+        <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ø Score -->
+  <div class="glass rounded-xl p-4 animate-fade-in" style="animation-delay:0.15s">
+    <div class="flex items-start justify-between">
+      <div>
+        <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Ø Score</p>
+        <p class="text-3xl font-bold text-yellow-400 mt-1" id="kpi-avg-score">—</p>
+        <p class="text-xs text-gray-500 mt-1">von 10 möglich</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:rgba(234,179,8,0.15);">
+        <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MIDDLE ROW ── -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+
+  <!-- Score-Verteilung Chart -->
+  <div class="glass rounded-xl p-5 lg:col-span-2">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-semibold text-white">Score-Verteilung</h3>
+      <span class="text-xs text-gray-500 font-mono">letzte 30 Leads</span>
+    </div>
+    <div style="height:180px; position:relative;">
+      <canvas id="scoreChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Pipeline Status -->
+  <div class="glass rounded-xl p-5">
+    <h3 class="text-sm font-semibold text-white mb-4">Pipeline-Agents</h3>
+    <div class="space-y-3" id="agent-status-list">
+
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold" style="background:rgba(34,197,94,0.15);color:#4ade80;">O</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-medium text-gray-200">Orchestrator</p>
+          <p class="text-xs text-gray-500">Pipeline-Steuerung</p>
+        </div>
+        <span class="w-2 h-2 rounded-full dot-green"></span>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold" style="background:rgba(59,130,246,0.15);color:#60a5fa;">R</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-medium text-gray-200">Research Agent</p>
+          <p class="text-xs text-gray-500">Website + LinkedIn</p>
+        </div>
+        <span class="w-2 h-2 rounded-full dot-green"></span>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold" style="background:rgba(234,179,8,0.15);color:#fde047;">S</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-medium text-gray-200">Scoring Agent</p>
+          <p class="text-xs text-gray-500">12 Kriterien · Sonnet 4.6</p>
+        </div>
+        <span class="w-2 h-2 rounded-full dot-green"></span>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold" style="background:rgba(168,85,247,0.15);color:#c084fc;">W</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-medium text-gray-200">Writer Agent</p>
+          <p class="text-xs text-gray-500">Opus 4.6 · DE-Mail</p>
+        </div>
+        <span class="w-2 h-2 rounded-full dot-green"></span>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold" style="background:rgba(20,184,166,0.15);color:#2dd4bf;">V</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-medium text-gray-200">Reviewer Agent</p>
+          <p class="text-xs text-gray-500">Qualität · max 2 Retries</p>
+        </div>
+        <span class="w-2 h-2 rounded-full dot-green"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── RECENT LEADS TABLE ── -->
+<div class="glass rounded-xl overflow-hidden">
+  <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+    <h3 class="text-sm font-semibold text-white">Letzte Leads</h3>
+    <div class="flex items-center gap-3">
+      <span id="live-indicator" class="flex items-center gap-1.5 text-xs text-green-400">
+        <span class="w-1.5 h-1.5 rounded-full dot-green animate-pulse"></span>
+        Live
+      </span>
+      <a href="/leads" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">Alle anzeigen →</a>
+    </div>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr style="background:rgba(255,255,255,0.02); border-bottom:1px solid rgba(255,255,255,0.05);">
+          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Lead-ID</th>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Firma</th>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Score</th>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Dauer</th>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Zeit</th>
+        </tr>
+      </thead>
+      <tbody id="leads-table-body">
+        <!-- Dynamisch befüllt via JS -->
+        <tr>
+          <td colspan="6" class="px-5 py-12 text-center">
+            <div class="flex flex-col items-center gap-3 text-gray-600">
+              <svg class="w-10 h-10 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+              <p class="text-sm">Noch keine Leads verarbeitet</p>
+              <a href="/test-webhook" class="text-xs text-green-500 hover:text-green-400 transition-colors">→ Ersten Test-Lead senden</a>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // ── Score Chart ──
+  const ctx = document.getElementById('scoreChart').getContext('2d');
+  const scoreChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['1','2','3','4','5','6','7','8','9','10'],
+      datasets: [{
+        label: 'Leads',
+        data: [0,0,0,0,0,0,0,0,0,0],
+        backgroundColor: [
+          'rgba(239,68,68,0.6)','rgba(239,68,68,0.6)','rgba(239,68,68,0.6)',
+          'rgba(239,68,68,0.6)','rgba(234,179,8,0.6)','rgba(234,179,8,0.6)',
+          'rgba(34,197,94,0.6)','rgba(34,197,94,0.7)','rgba(34,197,94,0.8)','rgba(34,197,94,0.9)',
+        ],
+        borderColor: [
+          '#ef4444','#ef4444','#ef4444',
+          '#ef4444','#eab308','#eab308',
+          '#22c55e','#22c55e','#22c55e','#22c55e',
+        ],
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#6b7280', font: { size: 11, family: 'JetBrains Mono' } }
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#6b7280', font: { size: 11 }, stepSize: 1 },
+          beginAtZero: true,
+        }
+      }
+    }
+  });
+
+  // ── Score-Badge HTML ──
+  function scoreBadge(score) {
+    const cls = score >= 7 ? 'score-high' : score >= 5 ? 'score-mid' : 'score-low';
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold ${cls}">${score}/10</span>`;
+  }
+
+  // ── Status-Badge HTML ──
+  function statusBadge(type) {
+    if (type === 'qualify')
+      return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium" style="background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.25);">
+        <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>Qualifiziert</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium" style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.25);">
+        <span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>Abgelehnt</span>`;
+  }
+
+  // ── Dashboard-Daten laden ──
+  async function loadDashboard() {
+    try {
+      const r = await fetch('/api/leads/recent?limit=10');
+      const d = await r.json();
+      const leads = d.leads || [];
+
+      // KPIs
+      const total = leads.length;
+      const qualified = leads.filter(l => l.email_type === 'qualify').length;
+      const rejected = total - qualified;
+      const avgScore = total > 0 ? (leads.reduce((s,l) => s + (l.score||0), 0) / total).toFixed(1) : '—';
+
+      document.getElementById('kpi-total').textContent = total;
+      document.getElementById('kpi-qualified').textContent = qualified;
+      document.getElementById('kpi-rejected').textContent = rejected;
+      document.getElementById('kpi-avg-score').textContent = avgScore;
+
+      if (total > 0) {
+        document.getElementById('kpi-qualified-pct').textContent = `${Math.round(qualified/total*100)} % Rate`;
+        document.getElementById('kpi-rejected-pct').textContent = `${Math.round(rejected/total*100)} % Rate`;
+      }
+
+      // Score-Chart aktualisieren
+      const buckets = new Array(10).fill(0);
+      leads.forEach(l => { if (l.score >= 1 && l.score <= 10) buckets[l.score-1]++; });
+      scoreChart.data.datasets[0].data = buckets;
+      scoreChart.update('none');
+
+      // Tabelle befüllen
+      const tbody = document.getElementById('leads-table-body');
+      if (leads.length === 0) return;
+
+      tbody.innerHTML = leads.map(l => `
+        <tr class="table-row border-b border-white/5 transition-colors">
+          <td class="px-5 py-3 font-mono text-xs text-gray-400">${l.lead_id ? l.lead_id.slice(0,8)+'…' : '—'}</td>
+          <td class="px-5 py-3 text-sm text-gray-200 font-medium">${l.company || '—'}</td>
+          <td class="px-5 py-3">${scoreBadge(l.score || 0)}</td>
+          <td class="px-5 py-3">${statusBadge(l.email_type || 'reject')}</td>
+          <td class="px-5 py-3 font-mono text-xs text-gray-400">${l.duration_seconds ? l.duration_seconds.toFixed(1)+'s' : '—'}</td>
+          <td class="px-5 py-3 text-xs text-gray-500">${l.created_at ? new Date(l.created_at).toLocaleTimeString('de-DE') : '—'}</td>
+        </tr>
+      `).join('');
+
+    } catch(e) {
+      // API noch nicht bereit — lautlos fehlschlagen
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadDashboard();
+    setInterval(loadDashboard, 10000);
+  });
+</script>
+{% endblock %}

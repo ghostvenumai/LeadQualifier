@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="de" class="h-full dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}LeadQualifier AI{% endblock %} — GhostVenumAI</title>
+
+  <!-- Theme & Lang: sofort laden um Flash zu vermeiden -->
+  <script>
+    (function(){
+      var t = localStorage.getItem('lq-theme') || 'dark';
+      var l = localStorage.getItem('lq-lang')  || 'de';
+      var h = document.documentElement;
+      h.classList.remove('dark','light');
+      h.classList.add(t);
+      h.setAttribute('lang', l);
+      h.setAttribute('data-lang', l);
+    })();
+  </script>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50:  '#f0fdf4',
+              100: '#dcfce7',
+              400: '#4ade80',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              900: '#14532d',
+            },
+            dark: {
+              900: '#0a0e1a',
+              800: '#0f1629',
+              700: '#151e38',
+              600: '#1c2a4a',
+              500: '#243357',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4,0,0.6,1) infinite',
+            'slide-in': 'slideIn 0.3s ease-out',
+            'fade-in': 'fadeIn 0.4s ease-out',
+          },
+          keyframes: {
+            slideIn: { '0%': { transform: 'translateY(-10px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+            fadeIn:  { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ── DARK MODE (default) ── */
+    :root { color-scheme: dark; }
+    html.dark body { background: #0a0e1a; }
+
+    /* ── LIGHT MODE ── */
+    html.light { color-scheme: light; }
+    html.light body { background: #f1f5f9; color: #1e293b; }
+    html.light aside { background: #ffffff !important; border-right-color: #e2e8f0 !important; }
+    html.light header { background: rgba(255,255,255,0.97) !important; border-bottom-color: #e2e8f0 !important; }
+    html.light .glass { background: rgba(255,255,255,0.9) !important; border-color: #e2e8f0 !important; backdrop-filter: blur(12px); }
+    html.light .text-white  { color: #0f172a !important; }
+    html.light .text-gray-100 { color: #1e293b !important; }
+    html.light .text-gray-200 { color: #334155 !important; }
+    html.light .text-gray-300 { color: #475569 !important; }
+    html.light .text-gray-400 { color: #64748b !important; }
+    html.light .text-gray-500 { color: #94a3b8 !important; }
+    html.light .nav-active { background: rgba(34,197,94,0.1) !important; color: #16a34a !important; border-left-color: #22c55e !important; }
+    html.light .nav-item:not(.nav-active):hover { background: rgba(0,0,0,0.04) !important; }
+    html.light [style*="background:rgba(255,255,255,0.02)"],
+    html.light [style*="background: rgba(255,255,255,0.02)"] { background: rgba(0,0,0,0.03) !important; }
+    html.light [style*="background:rgba(255,255,255,0.03)"],
+    html.light [style*="background: rgba(255,255,255,0.03)"] { background: rgba(0,0,0,0.04) !important; }
+    html.light [style*="background:rgba(255,255,255,0.04)"],
+    html.light [style*="background: rgba(255,255,255,0.04)"] { background: rgba(0,0,0,0.05) !important; }
+    html.light ::-webkit-scrollbar-track { background: #f1f5f9; }
+    html.light ::-webkit-scrollbar-thumb { background: #cbd5e1; }
+    html.light #license-sidebar { border-color: rgba(34,197,94,0.3) !important; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f1629; }
+    ::-webkit-scrollbar-thumb { background: #243357; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #2d4070; }
+
+    /* Glass Card */
+    .glass {
+      background: rgba(21, 30, 56, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    /* Gradient border */
+    .gradient-border {
+      background: linear-gradient(135deg, #0f1629, #151e38);
+      border: 1px solid transparent;
+      background-clip: padding-box;
+      position: relative;
+    }
+    .gradient-border::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      background: linear-gradient(135deg, rgba(34,197,94,0.3), rgba(59,130,246,0.2), transparent);
+      z-index: -1;
+    }
+
+    /* Score badge */
+    .score-high  { background: rgba(34,197,94,0.15);  color: #4ade80;  border: 1px solid rgba(34,197,94,0.3);  }
+    .score-mid   { background: rgba(234,179,8,0.15);  color: #fde047;  border: 1px solid rgba(234,179,8,0.3);  }
+    .score-low   { background: rgba(239,68,68,0.15);  color: #f87171;  border: 1px solid rgba(239,68,68,0.3);  }
+
+    /* Status dot */
+    .dot-green  { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+    .dot-yellow { background: #eab308; box-shadow: 0 0 6px #eab308; }
+    .dot-red    { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+    .dot-blue   { background: #3b82f6; box-shadow: 0 0 6px #3b82f6; }
+
+    /* Sidebar active */
+    .nav-active {
+      background: rgba(34,197,94,0.12);
+      border-left: 2px solid #22c55e;
+      color: #4ade80;
+    }
+
+    /* Agent badge glow */
+    .agent-glow { box-shadow: 0 0 20px rgba(34,197,94,0.15); }
+
+    /* Table hover */
+    .table-row:hover { background: rgba(255,255,255,0.03); }
+
+    /* Input focus */
+    .form-input:focus {
+      outline: none;
+      border-color: rgba(34,197,94,0.5);
+      box-shadow: 0 0 0 3px rgba(34,197,94,0.1);
+    }
+
+    /* Progress bar */
+    .progress-bar {
+      background: linear-gradient(90deg, #22c55e, #16a34a);
+      box-shadow: 0 0 10px rgba(34,197,94,0.4);
+    }
+
+    /* Toast */
+    #toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9999; }
+    .toast {
+      min-width: 280px;
+      padding: 0.875rem 1.25rem;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      animation: slideIn 0.3s ease-out;
+    }
+    .toast-success { background: rgba(21,128,61,0.95); border: 1px solid #22c55e; color: #dcfce7; }
+    .toast-error   { background: rgba(127,29,29,0.95); border: 1px solid #ef4444; color: #fee2e2; }
+    .toast-info    { background: rgba(30,58,138,0.95); border: 1px solid #3b82f6; color: #dbeafe; }
+  </style>
+</head>
+
+<body class="h-full font-sans text-gray-100 antialiased">
+<div class="flex h-screen overflow-hidden">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="w-64 flex-shrink-0 flex flex-col" style="background:#0f1629; border-right:1px solid rgba(255,255,255,0.06);">
+
+    <!-- Logo -->
+    <div class="px-6 py-5 border-b border-white/5">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:linear-gradient(135deg,#22c55e,#16a34a);">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-sm font-bold text-white leading-none">LeadQualifier</p>
+          <p class="text-xs text-gray-500 mt-0.5">GhostVenumAI</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nav -->
+    <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      <p class="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Hauptmenü</p>
+
+      <a href="/" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if active_page == 'dashboard' %}nav-active{% else %}text-gray-400 hover:text-gray-100 hover:bg-white/5{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        Dashboard
+      </a>
+
+      <a href="/leads" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if active_page == 'leads' %}nav-active{% else %}text-gray-400 hover:text-gray-100 hover:bg-white/5{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        Leads
+        <span id="sidebar-lead-count" class="ml-auto text-xs px-1.5 py-0.5 rounded-full font-mono" style="background:rgba(34,197,94,0.15);color:#4ade80;">0</span>
+      </a>
+
+      <a href="/pipeline" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if active_page == 'pipeline' %}nav-active{% else %}text-gray-400 hover:text-gray-100 hover:bg-white/5{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+        Pipeline
+      </a>
+
+      <a href="/test-webhook" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if active_page == 'test' %}nav-active{% else %}text-gray-400 hover:text-gray-100 hover:bg-white/5{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Lead testen
+      </a>
+
+      <div class="pt-3">
+        <p class="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">System</p>
+      </div>
+
+      <a href="/settings" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if active_page == 'settings' %}nav-active{% else %}text-gray-400 hover:text-gray-100 hover:bg-white/5{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Einstellungen
+      </a>
+    </nav>
+
+    <!-- License Badge -->
+    <div class="px-4 py-4 border-t border-white/5">
+      <div id="license-sidebar" class="rounded-lg p-3" style="background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2);">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-semibold text-green-400">DEMO</span>
+          <span class="w-2 h-2 rounded-full dot-green animate-pulse-slow"></span>
+        </div>
+        <div class="text-xs text-gray-400" id="license-sidebar-info">10 Leads verfügbar</div>
+        <div class="mt-2 h-1 rounded-full bg-white/10">
+          <div id="license-progress" class="h-1 rounded-full progress-bar" style="width:100%"></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+
+    <!-- Topbar -->
+    <header class="flex-shrink-0 flex items-center justify-between px-6 py-3.5" style="background:rgba(15,22,41,0.95); border-bottom:1px solid rgba(255,255,255,0.06); backdrop-filter:blur(8px);">
+      <div>
+        <h1 class="text-base font-semibold text-white">{% block page_title %}Dashboard{% endblock %}</h1>
+        <p class="text-xs text-gray-500 mt-0.5">{% block page_subtitle %}Übersicht & Live-Monitor{% endblock %}</p>
+      </div>
+      <div class="flex items-center gap-4">
+        <!-- System Status -->
+        <div class="flex items-center gap-2 text-xs text-gray-400">
+          <span class="w-2 h-2 rounded-full dot-green animate-pulse-slow"></span>
+          System aktiv
+        </div>
+        <!-- Webhook URL -->
+        <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg font-mono text-xs" style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); color:#6b7280;">
+          POST /webhook/lead
+        </div>
+        <!-- Avatar -->
+        <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white" style="background:linear-gradient(135deg,#22c55e,#16a34a);">
+          GV
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main class="flex-1 overflow-y-auto p-6">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container" class="space-y-2"></div>
+
+<!-- Base JS -->
+<script>
+  // ── i18n ──────────────────────────────────────────────────────────────────
+  const _I18N = {
+    de: {
+      nav_dashboard: 'Dashboard', nav_leads: 'Leads', nav_pipeline: 'Pipeline',
+      nav_test: 'Lead testen', nav_settings: 'Einstellungen', nav_main: 'Hauptmenü', nav_system: 'System',
+      header_subtitle_dashboard: 'Übersicht & Live-Monitor',
+      system_active: 'System aktiv',
+      lic_available: 'von 10 Leads verfügbar', lic_full: 'Vollversion aktiv',
+    },
+    en: {
+      nav_dashboard: 'Dashboard', nav_leads: 'Leads', nav_pipeline: 'Pipeline',
+      nav_test: 'Test Lead', nav_settings: 'Settings', nav_main: 'Main Menu', nav_system: 'System',
+      header_subtitle_dashboard: 'Overview & Live Monitor',
+      system_active: 'System active',
+      lic_available: 'of 10 leads remaining', lic_full: 'Full version active',
+    },
+    es: {
+      nav_dashboard: 'Panel', nav_leads: 'Leads', nav_pipeline: 'Pipeline',
+      nav_test: 'Probar Lead', nav_settings: 'Ajustes', nav_main: 'Menú Principal', nav_system: 'Sistema',
+      header_subtitle_dashboard: 'Resumen & Monitor en vivo',
+      system_active: 'Sistema activo',
+      lic_available: 'de 10 leads disponibles', lic_full: 'Versión completa activa',
+    },
+  };
+
+  function t(key) {
+    const lang = localStorage.getItem('lq-lang') || 'de';
+    return (_I18N[lang] || _I18N.de)[key] || key;
+  }
+
+  function applyI18n() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (key) el.textContent = t(key);
+    });
+  }
+
+  // ── Theme helpers ─────────────────────────────────────────────────────────
+  function setTheme(theme) {
+    localStorage.setItem('lq-theme', theme);
+    document.documentElement.classList.remove('dark', 'light');
+    document.documentElement.classList.add(theme);
+    document.querySelectorAll('[data-theme-icon-dark]').forEach(el => {
+      el.style.display = theme === 'dark' ? '' : 'none';
+    });
+    document.querySelectorAll('[data-theme-icon-light]').forEach(el => {
+      el.style.display = theme === 'light' ? '' : 'none';
+    });
+  }
+
+  function setLang(lang) {
+    localStorage.setItem('lq-lang', lang);
+    document.documentElement.setAttribute('lang', lang);
+    document.documentElement.setAttribute('data-lang', lang);
+    applyI18n();
+  }
+
+  // ── Toast-System
+  function showToast(msg, type = 'info', duration = 4000) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<div class="flex items-center gap-2">
+      <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+        ${type === 'success' ? '<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>'
+        : type === 'error'   ? '<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>'
+        : '<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>'}
+      </svg>
+      <span>${msg}</span>
+    </div>`;
+    container.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, duration);
+  }
+
+  // Lizenz-Status laden
+  async function loadLicenseStatus() {
+    try {
+      const r = await fetch('/api/status');
+      const d = await r.json();
+      const lic = d.license;
+      const info = document.getElementById('license-sidebar-info');
+      const prog = document.getElementById('license-progress');
+      const badge = document.getElementById('license-sidebar');
+
+      if (lic.type === 'demo') {
+        const rem = lic.leads_remaining ?? 10;
+        if (info) info.textContent = `${rem} von 10 Leads verfügbar`;
+        if (prog) prog.style.width = `${(rem / 10) * 100}%`;
+        if (!lic.active && badge) {
+          badge.style.borderColor = 'rgba(239,68,68,0.3)';
+          badge.style.background = 'rgba(239,68,68,0.08)';
+        }
+      } else {
+        const el = badge?.querySelector('span:first-child');
+        if (el) el.textContent = lic.type.toUpperCase();
+        if (info) info.textContent = 'Vollversion aktiv';
+        if (prog) prog.style.width = '100%';
+      }
+
+      // Sidebar Lead-Count
+      const cnt = document.getElementById('sidebar-lead-count');
+      if (cnt) cnt.textContent = 10 - (lic.leads_remaining ?? 10);
+    } catch(e) { /* still loading */ }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    applyI18n();
+    setTheme(localStorage.getItem('lq-theme') || 'dark');
+    loadLicenseStatus();
+    setInterval(loadLicenseStatus, 30000);
+  });
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>
