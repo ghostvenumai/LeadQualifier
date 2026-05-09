@@ -31,6 +31,7 @@ LeadQualifier AI empfängt eingehende B2B-Kontaktanfragen über einen Webhook, b
 
 - **5 KI-Agents** arbeiten parallel: Research, Scoring, Writer, Reviewer, Orchestrator
 - **12-Kriterien-Scoring** — jeder Lead wird präzise von 1–10 bewertet
+- **Duplikat-Erkennung** — erkennt automatisch ob eine Firma oder E-Mail bereits eingereicht wurde
 - **Hiring-Erkennung** — prüft ob die Firma gerade Mitarbeiter sucht (Website + Indeed)
 - **Personalisierte E-Mails** via Claude Opus 4.6 (beste Modellqualität)
 - **DSGVO-konform** — keine E-Mail-Adressen in Logs oder Datenbank
@@ -41,6 +42,41 @@ LeadQualifier AI empfängt eingehende B2B-Kontaktanfragen über einen Webhook, b
 
 ---
 
+## Duplikat-Erkennung
+
+Das System erkennt automatisch, wenn eine Firma oder eine E-Mail-Adresse bereits eingereicht wurde — bevor die teure KI-Pipeline gestartet wird. Das spart API-Kosten und verhindert doppelte E-Mails an denselben Kontakt.
+
+### Zwei Erkennungsstufen
+
+| Typ | Zeitfenster | Logik |
+|---|---|---|
+| **E-Mail-Duplikat** | 30 Tage | Exakt selbe E-Mail-Adresse (SHA-256-Hash-Vergleich, DSGVO-konform) |
+| **Firmen-Duplikat** | 7 Tage | Selber Firmenname — Rechtsformen werden ignoriert |
+
+### Intelligente Firmennamen-Normalisierung
+
+`Mustermann GmbH`, `Mustermann AG` und `Mustermann GmbH & Co. KG` werden alle als `mustermann` erkannt.  
+Ignorierte Rechtsformen: GmbH, AG, UG, KG, OHG, GbR, Ltd, Inc, LLC, Corp, SE, eV und weitere.
+
+### Response bei Duplikat
+
+HTTP `409 Conflict`:
+
+```json
+{
+  "success": false,
+  "error": "duplicate",
+  "reason": "Von diesem Unternehmen wurde bereits in den letzten 7 Tagen ein Lead eingereicht.",
+  "last_submitted": "2026-05-02T10:30:00+00:00",
+  "last_score": 8,
+  "last_status": "qualified"
+}
+```
+
+Die Antwort enthält wann der letzte Lead war, welchen Score er hatte und ob er qualifiziert wurde — so kann das aufrufende System direkt entscheiden was zu tun ist.
+
+---
+
 ## Architektur
 
 ```
@@ -48,7 +84,13 @@ POST /webhook/lead
         │
         ▼
 ┌─────────────────────┐
-│  ORCHESTRATOR AGENT │  ← Validierung, Lizenz-Check, Pipeline-Koordination
+│  Validierung &      │  ← Pydantic, Lizenz-Check
+│  Duplikat-Check     │  ← E-Mail (30 Tage) + Firma (7 Tage) → HTTP 409
+└──────────┬──────────┘
+           │  (nur neue, einmalige Leads)
+           ▼
+┌─────────────────────┐
+│  ORCHESTRATOR AGENT │  ← Pipeline-Koordination
 └──────────┬──────────┘
            │  asyncio.gather() — parallel
     ┌──────┴──────┐

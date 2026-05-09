@@ -16,6 +16,7 @@ DSGVO-Konformitaet:
 import hashlib
 import json
 import logging
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -141,6 +142,21 @@ class MemoryDB:
                 CREATE INDEX IF NOT EXISTS idx_companies_last_updated
                     ON companies(last_updated);
             """)
+
+            # Migration: company_name-Spalte fuer Duplikat-Erkennung
+            try:
+                conn.execute("ALTER TABLE leads ADD COLUMN company_name TEXT")
+                logger.debug("MemoryDB: Spalte 'company_name' zur leads-Tabelle hinzugefuegt.")
+            except sqlite3.OperationalError:
+                pass  # Spalte existiert bereits
+
+            try:
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_leads_company_name ON leads(company_name)"
+                )
+            except sqlite3.OperationalError:
+                pass
+
             logger.debug("MemoryDB: Tabellen und Indizes sichergestellt.")
 
     def get_company_cache(self, domain: str) -> Optional[dict]:
@@ -255,6 +271,7 @@ class MemoryDB:
         try:
             email_hash = self.hash_email(blackboard.email) if blackboard.email else ""
             company_domain = self._extract_domain(blackboard.research.get("website_url", ""))
+            company_name = self._normalize_company_name(blackboard.company or "")
             status = "qualified" if blackboard.review_passed else "rejected"
             now = datetime.now(timezone.utc).isoformat()
             pipeline_log_json = json.dumps(
@@ -267,13 +284,14 @@ class MemoryDB:
                 conn.execute(
                     """
                     INSERT INTO leads
-                        (email_hash, company_domain, score, status,
+                        (email_hash, company_domain, company_name, score, status,
                          contacted_at, became_customer, pipeline_log)
-                    VALUES (?, ?, ?, ?, ?, FALSE, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, FALSE, ?)
                     """,
                     (
                         email_hash,
                         company_domain,
+                        company_name,
                         blackboard.score,
                         status,
                         now,
@@ -610,6 +628,123 @@ class MemoryDB:
             SHA-256-Hash als Hex-String.
         """
         return hashlib.sha256(key.strip().encode("utf-8")).hexdigest()
+
+    def check_duplicate_email(
+        self, email: str, window_days: int = 30
+    ) -> Optional[dict]:
+        """
+        Prueft ob eine E-Mail-Adresse bereits innerhalb des Zeitfensters eingereicht wurde.
+
+        Vergleicht den SHA-256-Hash der E-Mail mit gespeicherten Eintraegen.
+        Die E-Mail selbst wird weder geloggt noch gespeichert.
+
+        Args:
+            email: Klartextmail (wird intern gehasht).
+            window_days: Zeitfenster in Tagen (Standard: 30).
+
+        Returns:
+            Dict mit contacted_at, score, status des juengsten Duplikats oder None.
+        """
+        email_hash = self.hash_email(email)
+        threshold = (datetime.now(timezone.utc) - timedelta(days=window_days)).isoformat()
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    """
+                    SELECT id, company_name, score, status, contacted_at
+                    FROM leads
+                    WHERE email_hash = ?
+                      AND contacted_at >= ?
+                    ORDER BY contacted_at DESC
+                    LIMIT 1
+                    """,
+                    (email_hash, threshold),
+                ).fetchone()
+            return dict(row) if row else None
+        except Exception as exc:
+            logger.error(
+                "MemoryDB: check_duplicate_email fehlgeschlagen: %s",
+                type(exc).__name__,
+                exc_info=True,
+            )
+            return None
+
+    def check_duplicate_company(
+        self, company_name: str, window_days: int = 7
+    ) -> Optional[dict]:
+        """
+        Prueft ob derselbe Firmenname bereits innerhalb des Zeitfensters eingereicht wurde.
+
+        Verwendet normalisierten Firmennamen (Rechtsformen entfernt, lowercase).
+
+        Args:
+            company_name: Firmenname aus dem Webhook.
+            window_days: Zeitfenster in Tagen (Standard: 7).
+
+        Returns:
+            Dict mit contacted_at, score, status des juengsten Duplikats oder None.
+        """
+        normalized = self._normalize_company_name(company_name)
+        if not normalized:
+            return None
+        threshold = (datetime.now(timezone.utc) - timedelta(days=window_days)).isoformat()
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    """
+                    SELECT id, company_name, score, status, contacted_at
+                    FROM leads
+                    WHERE company_name = ?
+                      AND contacted_at >= ?
+                    ORDER BY contacted_at DESC
+                    LIMIT 1
+                    """,
+                    (normalized, threshold),
+                ).fetchone()
+            return dict(row) if row else None
+        except Exception as exc:
+            logger.error(
+                "MemoryDB: check_duplicate_company fehlgeschlagen: %s",
+                type(exc).__name__,
+                exc_info=True,
+            )
+            return None
+
+    def _normalize_company_name(self, name: str) -> str:
+        """
+        Normalisiert einen Firmennamen fuer Duplikat-Vergleiche.
+
+        Entfernt gaengige Rechtsformen (GmbH, AG, Ltd, etc.), wandelt in
+        Kleinbuchstaben und bereinigt Whitespace.
+
+        Args:
+            name: Firmenname im Klartext.
+
+        Returns:
+            Normalisierter Firmenname als Lowercase-String.
+        """
+        normalized = name.strip().lower()
+        suffixes = [
+            r"gmbh\s*&\s*co\.?\s*kg",
+            r"gmbh\s*&\s*co",
+            r"gmbh",
+            r"ug\s*\(haftungsbeschraenkt\)",
+            r"ug",
+            r"\bag\b",
+            r"\bkg\b",
+            r"\bohg\b",
+            r"\bgbr\b",
+            r"\bltd\b",
+            r"\binc\b",
+            r"\bllc\b",
+            r"\bllp\b",
+            r"\bcorp\b",
+            r"\bse\b",
+            r"\bev\b",
+        ]
+        for suffix in suffixes:
+            normalized = re.sub(rf"\s+{suffix}\.?\s*$", "", normalized)
+        return normalized.strip()
 
     def _extract_domain(self, url: str) -> str:
         """

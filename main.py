@@ -234,6 +234,31 @@ def webhook_lead() -> tuple[Any, int]:
         logger.info("Lizenz inaktiv: %s", license_info.reason)
         return _error(f"Lizenz inaktiv: {license_info.reason}", 403)
 
+    # Duplikat-Erkennung (Email: 30 Tage, Firma: 7 Tage)
+    email_dup = db.check_duplicate_email(str(lead_input.email))
+    if email_dup:
+        logger.info("Duplikat-Lead abgewiesen: gleiche E-Mail innerhalb von 30 Tagen.")
+        return jsonify({
+            "success": False,
+            "error": "duplicate",
+            "reason": "Diese E-Mail-Adresse wurde bereits in den letzten 30 Tagen eingereicht.",
+            "last_submitted": email_dup.get("contacted_at"),
+            "last_score": email_dup.get("score"),
+            "last_status": email_dup.get("status"),
+        }), 409
+
+    company_dup = db.check_duplicate_company(lead_input.company)
+    if company_dup:
+        logger.info("Duplikat-Lead abgewiesen: gleiche Firma innerhalb von 7 Tagen.")
+        return jsonify({
+            "success": False,
+            "error": "duplicate",
+            "reason": "Von diesem Unternehmen wurde bereits in den letzten 7 Tagen ein Lead eingereicht.",
+            "last_submitted": company_dup.get("contacted_at"),
+            "last_score": company_dup.get("score"),
+            "last_status": company_dup.get("status"),
+        }), 409
+
     # Pipeline starten
     logger.info("Pipeline gestartet fuer Lead (company masked)")
     try:
