@@ -239,13 +239,10 @@
     <div class="px-4 py-4 border-t border-white/5">
       <div id="license-sidebar" class="rounded-lg p-3" style="background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2);">
         <div class="flex items-center justify-between mb-1">
-          <span class="text-xs font-semibold text-green-400">DEMO</span>
+          <span class="text-xs font-semibold text-green-400" id="license-sidebar-label">Open Source</span>
           <span class="w-2 h-2 rounded-full dot-green animate-pulse-slow"></span>
         </div>
-        <div class="text-xs text-gray-400" id="license-sidebar-info">10 Leads verfügbar</div>
-        <div class="mt-2 h-1 rounded-full bg-white/10">
-          <div id="license-progress" class="h-1 rounded-full progress-bar" style="width:100%"></div>
-        </div>
+        <div class="text-xs text-gray-400" id="license-sidebar-info">Unlimitiert aktiv</div>
       </div>
     </div>
   </aside>
@@ -369,27 +366,15 @@
       const d = await r.json();
       const lic = d.license;
       const info = document.getElementById('license-sidebar-info');
-      const prog = document.getElementById('license-progress');
       const badge = document.getElementById('license-sidebar');
 
-      if (lic.type === 'demo') {
-        const rem = lic.leads_remaining ?? 10;
-        if (info) info.textContent = `${rem} von 10 Leads verfügbar`;
-        if (prog) prog.style.width = `${(rem / 10) * 100}%`;
-        if (!lic.active && badge) {
-          badge.style.borderColor = 'rgba(239,68,68,0.3)';
-          badge.style.background = 'rgba(239,68,68,0.08)';
-        }
-      } else {
-        const el = badge?.querySelector('span:first-child');
-        if (el) el.textContent = lic.type.toUpperCase();
-        if (info) info.textContent = 'Vollversion aktiv';
-        if (prog) prog.style.width = '100%';
+      if (!lic.active && badge) {
+        badge.style.borderColor = 'rgba(239,68,68,0.3)';
+        badge.style.background = 'rgba(239,68,68,0.08)';
+        const label = document.getElementById('license-sidebar-label');
+        if (label) label.textContent = 'Inaktiv';
+        if (info) info.textContent = lic.reason || 'Lizenz inaktiv';
       }
-
-      // Sidebar Lead-Count
-      const cnt = document.getElementById('sidebar-lead-count');
-      if (cnt) cnt.textContent = 10 - (lic.leads_remaining ?? 10);
     } catch(e) { /* still loading */ }
   }
 

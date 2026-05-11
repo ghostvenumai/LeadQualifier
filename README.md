@@ -238,11 +238,11 @@ Das eingebaute Web-Dashboard bietet:
 
 ---
 
-## Lizenz & Vollversion
+## Lizenz
 
-Das System läuft im **Demo-Modus** (10 Leads · 14 Tage) ohne Lizenzschlüssel.
+LeadQualifier AI ist **Open Source** — kein Lizenzschlüssel, keine Lead-Begrenzung, keine Zeitbeschränkung.
 
-**Vollversion auf Anfrage** — [github.com/GhostVenumAI](https://github.com/GhostVenumAI)
+Einfach klonen, API-Key eintragen, starten.
 
 ---
 
