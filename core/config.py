@@ -135,6 +135,14 @@ class Settings:
         """
         return os.getenv("GMAIL_APP_PASSWORD") or None
 
+    @cached_property
+    def email_override(self) -> Optional[str]:
+        """
+        Demo-Modus: Alle ausgehenden E-Mails werden an diese Adresse umgeleitet
+        statt an die echte Lead-E-Mail. Ideal fuer Vorfuehrungen und Tests.
+        """
+        return os.getenv("EMAIL_OVERRIDE") or None
+
     # -------------------------------------------------------------------------
     # CRM INTEGRATION
     # -------------------------------------------------------------------------

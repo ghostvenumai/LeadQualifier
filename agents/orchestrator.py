@@ -232,7 +232,8 @@ class OrchestratorAgent:
         try:
             from integrations.gmail_client import GmailClient
             client = GmailClient(sender_email=sender, app_password=password)
-            sent = await client.send_lead_email(blackboard)
+            override = getattr(self._settings, "email_override", None)
+            sent = await client.send_lead_email(blackboard, override_to=override)
             if sent:
                 blackboard.log("OrchestratorAgent", f"email_sent: type={blackboard.email_type}")
             return sent

@@ -128,7 +128,11 @@ class GmailClient:
             logger.error("GmailClient: Unerwarteter Fehler: %s", type(exc).__name__)
             return False
 
-    async def send_lead_email(self, blackboard: LeadBlackboard) -> bool:
+    async def send_lead_email(
+        self,
+        blackboard: LeadBlackboard,
+        override_to: Optional[str] = None,
+    ) -> bool:
         """
         Sendet die fertige Lead-E-Mail aus dem Blackboard.
 
@@ -137,6 +141,8 @@ class GmailClient:
 
         Args:
             blackboard: Befuelltes LeadBlackboard nach Reviewer-Freigabe.
+            override_to: Wenn gesetzt, wird die E-Mail an diese Adresse
+                         umgeleitet (Demo-Modus / Test).
 
         Returns:
             True bei Erfolg.
@@ -157,8 +163,12 @@ class GmailClient:
                 body = "\n".join(lines[i + 1:]).strip()
                 break
 
+        recipient = override_to.strip() if override_to else blackboard.email
+        if override_to:
+            logger.info("GmailClient: E-Mail-Override aktiv – Umleitung an Override-Adresse.")
+
         return await self.send_email(
-            to=blackboard.email,
+            to=recipient,
             subject=subject,
             body=body,
         )
