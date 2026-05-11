@@ -34,11 +34,7 @@ logger = logging.getLogger(__name__)
 # Maximale Rohpunktzahl (Summe aller positiven Kriterien)
 _MAX_RAW_SCORE: int = 14  # 3+2+2+1+1+1+1+1+1+1 = 14
 
-_SYSTEM_PROMPT = """\
-Du bist ein erfahrener B2B-Vertriebsanalyst fuer den DACH-Markt (Deutschland, Oesterreich, Schweiz).
-Deine Aufgabe ist es, eingehende B2B-Leads praezise und objektiv zu bewerten.
-Du antwortest AUSSCHLIESSLICH mit einem validen JSON-Objekt - kein Freitext davor oder danach.
-"""
+import core.prompt_manager as _pm
 
 _USER_PROMPT_TEMPLATE = """\
 Bewerte den folgenden B2B-Lead anhand der 12 Kriterien und gib ein strukturiertes JSON-Ergebnis zurueck.
@@ -259,7 +255,7 @@ class ScoringAgent:
             response = self._client.messages.create(
                 model=self._settings.claude_agent_model,
                 max_tokens=1500,
-                system=_SYSTEM_PROMPT,
+                system=_pm.get("scoring_system"),
                 messages=[
                     {"role": "user", "content": user_prompt}
                 ],

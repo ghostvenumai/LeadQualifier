@@ -29,11 +29,7 @@ logger = logging.getLogger(__name__)
 _MAX_RETRIES: int = 2
 _MAX_WORDS: int = 300
 
-_SYSTEM_PROMPT = """\
-Du bist ein strenger Qualitaetspruefer fuer professionelle B2B-E-Mails im deutschsprachigen Raum.
-Du pruefst E-Mails auf Qualitaet und gibst ein strukturiertes JSON-Feedback.
-Du antwortest AUSSCHLIESSLICH mit einem validen JSON-Objekt - kein Freitext davor oder danach.
-"""
+import core.prompt_manager as _pm
 
 _REVIEW_PROMPT_TEMPLATE = """\
 Pruefe die folgende E-Mail auf Qualitaet fuer den B2B-Kontext.
@@ -248,7 +244,7 @@ class ReviewerAgent:
             response = self._client.messages.create(
                 model=self._settings.claude_agent_model,
                 max_tokens=600,
-                system=_SYSTEM_PROMPT,
+                system=_pm.get("reviewer_system"),
                 messages=[{"role": "user", "content": prompt}],
             )
 

@@ -22,33 +22,7 @@ from core.models import EmailDraft
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT_QUALIFY = """\
-Du bist ein erfahrener B2B-Vertriebsprofi bei GhostVenumAI im DACH-Markt.
-Du schreibst professionelle, personalisierte Qualifizierungs-E-Mails auf Deutsch.
-
-Deine E-Mails sind:
-- Professionell und auf Augenhöhe mit dem Empfaenger
-- Konkret und auf die spezifische Situation des Unternehmens eingegangen
-- Kurz und praegnant (max. 250 Woerter im Body)
-- Klar mit einem Call-to-Action (z.B. Termin, Demo, Gespraech)
-- Kein generisches "Schablonen-Gefuehl"
-
-Du antwortest AUSSCHLIESSLICH mit einem JSON-Objekt, kein Freitext davor oder danach.
-"""
-
-_SYSTEM_PROMPT_REJECT = """\
-Du bist ein erfahrener B2B-Vertriebsprofi bei GhostVenumAI im DACH-Markt.
-Du schreibst professionelle, respektvolle Absage-E-Mails auf Deutsch.
-
-Deine Absage-E-Mails sind:
-- Respektvoll und wertschaetzend
-- Kurz (max. 120 Woerter im Body)
-- Ohne Begruendung (kein "du bist zu klein/klein" etc.)
-- Lassen die Tuer fuer die Zukunft offen
-- Professionell und menschlich
-
-Du antwortest AUSSCHLIESSLICH mit einem JSON-Objekt, kein Freitext davor oder danach.
-"""
+import core.prompt_manager as _pm
 
 _QUALIFY_PROMPT_TEMPLATE = """\
 Erstelle eine personalisierte Qualifizierungs-E-Mail fuer den folgenden Lead.
@@ -215,7 +189,7 @@ class WriterAgent:
         contact_first_name = bb.name.split()[0] if bb.name.split() else bb.name
 
         if email_type == "qualify":
-            system_prompt = _SYSTEM_PROMPT_QUALIFY
+            system_prompt = _pm.get("qualify_system")
             news_summary = (
                 ", ".join(research.get("news_items", [])[:2])
                 if research.get("news_items")
@@ -234,7 +208,7 @@ class WriterAgent:
                 website_url=research.get("website_url") or "nicht verfuegbar",
             )
         else:
-            system_prompt = _SYSTEM_PROMPT_REJECT
+            system_prompt = _pm.get("reject_system")
             user_prompt = _REJECT_PROMPT_TEMPLATE.format(
                 contact_name=bb.name,
                 contact_first_name=contact_first_name,

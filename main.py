@@ -466,6 +466,58 @@ def api_feedback() -> tuple[Any, int]:
     return jsonify({"success": True, "message": "Feedback gespeichert."}), 200
 
 
+@app.get("/api/prompts")
+def api_prompts_get() -> tuple[Any, int]:
+    """Gibt alle konfigurierten Agent-System-Prompts zurueck."""
+    from core import prompt_manager as pm
+    return jsonify({"success": True, "prompts": pm.get_all()}), 200
+
+
+@app.post("/api/prompts")
+def api_prompts_save() -> tuple[Any, int]:
+    """
+    Speichert einen oder mehrere Agent-System-Prompts.
+
+    Erwartet JSON: { "key": "scoring_system", "content": "..." }
+    oder           { "prompts": { "scoring_system": "...", ... } }
+    """
+    from core import prompt_manager as pm
+
+    data = request.get_json(silent=True)
+    if not data:
+        return _error("Kein gueltiger JSON-Body.", 400)
+
+    valid_keys = set(pm.DEFAULTS.keys())
+
+    # Einzel-Speicherung: { key, content }
+    if "key" in data and "content" in data:
+        key = data["key"]
+        if key not in valid_keys:
+            return _error(f"Unbekannter Prompt-Key: {key}", 400)
+        ok = pm.save(key, data["content"])
+        return jsonify({"success": ok}), 200 if ok else 500
+
+    # Bulk-Speicherung: { prompts: { key: content, ... } }
+    if "prompts" in data and isinstance(data["prompts"], dict):
+        saved, failed = [], []
+        for key, content in data["prompts"].items():
+            if key not in valid_keys:
+                continue
+            if pm.save(key, content):
+                saved.append(key)
+            else:
+                failed.append(key)
+        return jsonify({"success": not failed, "saved": saved, "failed": failed}), 200
+
+    # Reset auf Default: { "key": "...", "reset": true }
+    if data.get("reset"):
+        key = data.get("key")
+        ok = pm.reset(key if key in valid_keys else None)
+        return jsonify({"success": ok}), 200 if ok else 500
+
+    return _error("Ungueltige Anfrage.", 400)
+
+
 # ---------------------------------------------------------------------------
 # App starten
 # ---------------------------------------------------------------------------
