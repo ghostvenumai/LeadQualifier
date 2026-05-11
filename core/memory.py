@@ -148,12 +148,19 @@ class MemoryDB:
                 conn.execute("ALTER TABLE leads ADD COLUMN company_name TEXT")
                 logger.debug("MemoryDB: Spalte 'company_name' zur leads-Tabelle hinzugefuegt.")
             except sqlite3.OperationalError:
-                pass  # Spalte existiert bereits
+                pass
 
             try:
                 conn.execute(
                     "CREATE INDEX IF NOT EXISTS idx_leads_company_name ON leads(company_name)"
                 )
+            except sqlite3.OperationalError:
+                pass
+
+            # Migration: cost_usd-Spalte fuer Kosten-Tracking
+            try:
+                conn.execute("ALTER TABLE leads ADD COLUMN cost_usd REAL DEFAULT 0.0")
+                logger.debug("MemoryDB: Spalte 'cost_usd' zur leads-Tabelle hinzugefuegt.")
             except sqlite3.OperationalError:
                 pass
 
@@ -285,8 +292,8 @@ class MemoryDB:
                     """
                     INSERT INTO leads
                         (email_hash, company_domain, company_name, score, status,
-                         contacted_at, became_customer, pipeline_log)
-                    VALUES (?, ?, ?, ?, ?, ?, FALSE, ?)
+                         contacted_at, became_customer, pipeline_log, cost_usd)
+                    VALUES (?, ?, ?, ?, ?, ?, FALSE, ?, ?)
                     """,
                     (
                         email_hash,
@@ -296,6 +303,7 @@ class MemoryDB:
                         status,
                         now,
                         pipeline_log_json,
+                        round(blackboard.api_cost_usd, 6),
                     ),
                 )
 
@@ -628,6 +636,50 @@ class MemoryDB:
             SHA-256-Hash als Hex-String.
         """
         return hashlib.sha256(key.strip().encode("utf-8")).hexdigest()
+
+    def get_cost_stats(self) -> dict:
+        """
+        Gibt aggregierte API-Kostenstatistiken aus der Datenbank zurueck.
+
+        Returns:
+            Dict mit total_cost_usd, total_leads, avg_cost_per_lead,
+            cost_today_usd, cost_this_month_usd.
+        """
+        try:
+            now = datetime.now(timezone.utc)
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+            month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    """
+                    SELECT
+                        COUNT(*)            AS total_leads,
+                        COALESCE(SUM(cost_usd), 0.0)  AS total_cost,
+                        COALESCE(AVG(CASE WHEN cost_usd > 0 THEN cost_usd END), 0.0) AS avg_cost,
+                        COALESCE(SUM(CASE WHEN contacted_at >= ? THEN cost_usd ELSE 0 END), 0.0) AS cost_today,
+                        COALESCE(SUM(CASE WHEN contacted_at >= ? THEN cost_usd ELSE 0 END), 0.0) AS cost_month
+                    FROM leads
+                    """,
+                    (today_start, month_start),
+                ).fetchone()
+
+            if row is None:
+                return {"total_cost_usd": 0.0, "total_leads": 0, "avg_cost_per_lead": 0.0,
+                        "cost_today_usd": 0.0, "cost_this_month_usd": 0.0}
+
+            return {
+                "total_cost_usd":     round(float(row["total_cost"]), 4),
+                "total_leads":        int(row["total_leads"]),
+                "avg_cost_per_lead":  round(float(row["avg_cost"]), 4),
+                "cost_today_usd":     round(float(row["cost_today"]), 4),
+                "cost_this_month_usd": round(float(row["cost_month"]), 4),
+            }
+
+        except Exception as exc:
+            logger.error("MemoryDB: get_cost_stats fehlgeschlagen: %s", type(exc).__name__, exc_info=True)
+            return {"total_cost_usd": 0.0, "total_leads": 0, "avg_cost_per_lead": 0.0,
+                    "cost_today_usd": 0.0, "cost_this_month_usd": 0.0}
 
     def check_duplicate_email(
         self, email: str, window_days: int = 30

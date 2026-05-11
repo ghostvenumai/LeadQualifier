@@ -385,6 +385,11 @@ class PipelineResult(BaseModel):
         max_length=1000,
         description="Fehlermeldung bei Pipeline-Fehler (None bei Erfolg)"
     )
+    cost_usd: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Gesamte API-Kosten fuer diesen Lead in USD"
+    )
     created_at: datetime = Field(
         default_factory=datetime.now,
         description="Zeitstempel des Pipeline-Abschlusses"

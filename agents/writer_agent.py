@@ -249,6 +249,13 @@ class WriterAgent:
             messages=[{"role": "user", "content": user_prompt}],
         )
 
+        self._blackboard.track_cost(
+            "WriterAgent",
+            self._settings.claude_writer_model,
+            response.usage.input_tokens,
+            response.usage.output_tokens,
+        )
+
         raw_text = response.content[0].text
         parsed = self._parse_response(raw_text)
 

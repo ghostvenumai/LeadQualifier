@@ -252,6 +252,13 @@ class ReviewerAgent:
                 messages=[{"role": "user", "content": prompt}],
             )
 
+            bb.track_cost(
+                "ReviewerAgent",
+                self._settings.claude_agent_model,
+                response.usage.input_tokens,
+                response.usage.output_tokens,
+            )
+
             raw_text = response.content[0].text
             parsed = self._parse_response(raw_text)
 

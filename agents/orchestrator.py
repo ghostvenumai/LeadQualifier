@@ -27,6 +27,7 @@ import httpx
 
 from core.blackboard import LeadBlackboard
 from core.config import Settings
+from core.memory import MemoryDB
 from core.models import LeadInput, PipelineResult
 
 from agents.research_agent import ResearchAgent
@@ -49,14 +50,16 @@ class OrchestratorAgent:
     Er wird direkt vom Flask-Webhook aufgerufen.
     """
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, db: Optional[MemoryDB] = None) -> None:
         """
         Initialisiert den OrchestratorAgent.
 
         Args:
             settings: Konfigurationsobjekt mit allen Umgebungsvariablen.
+            db: Optionale MemoryDB-Instanz fuer Lead-Persistenz.
         """
         self._settings = settings
+        self._db = db
 
     async def run(self, lead_input: LeadInput) -> PipelineResult:
         """
@@ -167,6 +170,9 @@ class OrchestratorAgent:
                 duration,
             )
 
+            if self._db:
+                self._db.save_lead(blackboard)
+
             return PipelineResult(
                 lead_id=lead_id,
                 score=blackboard.score,
@@ -174,6 +180,7 @@ class OrchestratorAgent:
                 email_sent=email_sent,
                 slack_notified=slack_notified,
                 duration_seconds=round(duration, 3),
+                cost_usd=round(blackboard.api_cost_usd, 6),
                 error=None,
             )
 

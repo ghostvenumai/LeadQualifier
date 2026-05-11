@@ -84,6 +84,38 @@ class LeadBlackboard:
     agent_log: list = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.now)
 
+    # KOSTEN-TRACKING
+    api_cost_usd: float = 0.0
+    api_usage: list = field(default_factory=list)
+
+    # Preise in USD pro Token (Stand Mai 2026)
+    _COST_PER_TOKEN: dict = field(default_factory=lambda: {
+        "claude-opus-4-6":    {"input": 15.0 / 1_000_000, "output": 75.0 / 1_000_000},
+        "claude-sonnet-4-6":  {"input":  3.0 / 1_000_000, "output": 15.0 / 1_000_000},
+        "claude-haiku-4-5":   {"input":  0.8 / 1_000_000, "output":  4.0 / 1_000_000},
+    })
+
+    def track_cost(self, agent: str, model: str, input_tokens: int, output_tokens: int) -> None:
+        """
+        Erfasst die API-Kosten eines Agent-Aufrufs.
+
+        Args:
+            agent: Name des Agents (z.B. "ScoringAgent").
+            model: Verwendetes Claude-Modell.
+            input_tokens: Anzahl Input-Token laut API-Response.
+            output_tokens: Anzahl Output-Token laut API-Response.
+        """
+        pricing = self._COST_PER_TOKEN.get(model, {"input": 0.0, "output": 0.0})
+        call_cost = input_tokens * pricing["input"] + output_tokens * pricing["output"]
+        self.api_cost_usd += call_cost
+        self.api_usage.append({
+            "agent": agent,
+            "model": model,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost_usd": round(call_cost, 6),
+        })
+
     def log(self, agent: str, action: str) -> None:
         """
         Fuegt einen Eintrag in den Agent-Audit-Log ein.

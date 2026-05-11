@@ -60,7 +60,7 @@ license_manager = LicenseManager(
     demo_max_days=settings.demo_max_days,
 )
 
-orchestrator = OrchestratorAgent(settings=settings)
+orchestrator = OrchestratorAgent(settings=settings, db=db)
 
 # ---------------------------------------------------------------------------
 # Rate-Limiting (einfaches In-Memory Dict: IP -> [timestamps])
@@ -164,6 +164,27 @@ def api_leads_recent() -> tuple[Any, int]:
     """Gibt die letzten N verarbeiteten Leads zurueck (kein PII)."""
     limit = min(int(request.args.get("limit", 50)), 200)
     return jsonify({"success": True, "leads": _recent_leads[-limit:]}), 200
+
+
+@app.get("/api/costs")
+def api_costs() -> tuple[Any, int]:
+    """Gibt aggregierte API-Kostenstatistiken zurueck."""
+    # Aus DB (persistente Werte inkl. vergangener Sitzungen)
+    db_stats = db.get_cost_stats()
+
+    # Live-Werte aus dem aktuellen In-Memory-Store
+    session_cost = sum(l.get("cost_usd", 0.0) for l in _recent_leads)
+    session_leads = len(_recent_leads)
+
+    return jsonify({
+        "success": True,
+        "session": {
+            "cost_usd": round(session_cost, 4),
+            "leads": session_leads,
+            "avg_per_lead": round(session_cost / session_leads, 4) if session_leads else 0.0,
+        },
+        "total": db_stats,
+    }), 200
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +300,7 @@ def webhook_lead() -> tuple[Any, int]:
         "email_type": result.email_type,
         "email_sent": result.email_sent,
         "duration_seconds": round(result.duration_seconds, 2),
+        "cost_usd": result.cost_usd,
         "created_at": _dt.now().isoformat(),
         "error": result.error,
     })

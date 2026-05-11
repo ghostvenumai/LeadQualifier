@@ -265,6 +265,13 @@ class ScoringAgent:
                 ],
             )
 
+            self._blackboard.track_cost(
+                "ScoringAgent",
+                self._settings.claude_agent_model,
+                response.usage.input_tokens,
+                response.usage.output_tokens,
+            )
+
             raw_text: str = response.content[0].text
             parsed = self._parse_claude_response(raw_text)
 
