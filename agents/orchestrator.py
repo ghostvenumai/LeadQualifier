@@ -61,7 +61,11 @@ class OrchestratorAgent:
         self._settings = settings
         self._db = db
 
-    async def run(self, lead_input: LeadInput) -> PipelineResult:
+    async def run(
+        self,
+        lead_input: LeadInput,
+        lead_id: Optional[str] = None,
+    ) -> PipelineResult:
         """
         Fuehrt die vollstaendige Lead-Qualifizierungs-Pipeline aus.
 
@@ -71,12 +75,15 @@ class OrchestratorAgent:
 
         Args:
             lead_input: Validiertes LeadInput-Objekt aus dem Webhook.
+            lead_id: Optionale vorab vergebene Pipeline-UUID (Async-Webhook
+                gibt die ID schon in der 202-Antwort zurueck). Wenn None,
+                wird eine neue UUID erzeugt.
 
         Returns:
             PipelineResult mit score, email_type, duration_seconds und
             optionalem error-Feld.
         """
-        lead_id = str(uuid.uuid4())
+        lead_id = lead_id or str(uuid.uuid4())
         start_time = time.monotonic()
 
         blackboard = LeadBlackboard(
@@ -173,7 +180,11 @@ class OrchestratorAgent:
             )
 
             if self._db:
-                self._db.save_lead(blackboard)
+                self._db.save_lead(
+                    blackboard,
+                    email_sent=email_sent,
+                    duration_seconds=duration,
+                )
 
             return PipelineResult(
                 lead_id=lead_id,

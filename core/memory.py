@@ -164,6 +164,26 @@ class MemoryDB:
             except sqlite3.OperationalError:
                 pass
 
+            # Migration: Spalten fuer DB-gestuetzte GUI/Status-API
+            for ddl in (
+                "ALTER TABLE leads ADD COLUMN pipeline_id TEXT",
+                "ALTER TABLE leads ADD COLUMN company_display TEXT",
+                "ALTER TABLE leads ADD COLUMN email_type TEXT",
+                "ALTER TABLE leads ADD COLUMN email_sent BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE leads ADD COLUMN duration_seconds REAL DEFAULT 0.0",
+            ):
+                try:
+                    conn.execute(ddl)
+                except sqlite3.OperationalError:
+                    pass
+
+            try:
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_leads_pipeline_id ON leads(pipeline_id)"
+                )
+            except sqlite3.OperationalError:
+                pass
+
             logger.debug("MemoryDB: Tabellen und Indizes sichergestellt.")
 
     def get_company_cache(self, domain: str) -> Optional[dict]:
@@ -265,7 +285,12 @@ class MemoryDB:
                 exc_info=True,
             )
 
-    def save_lead(self, blackboard: LeadBlackboard) -> None:
+    def save_lead(
+        self,
+        blackboard: LeadBlackboard,
+        email_sent: bool = False,
+        duration_seconds: float = 0.0,
+    ) -> None:
         """
         Speichert einen verarbeiteten Lead in der Datenbank.
 
@@ -274,6 +299,8 @@ class MemoryDB:
 
         Args:
             blackboard: Vollstaendig verarbeitetes Blackboard.
+            email_sent: Ob die E-Mail erfolgreich versendet wurde.
+            duration_seconds: Pipeline-Laufzeit in Sekunden.
         """
         try:
             email_hash = self.hash_email(blackboard.email) if blackboard.email else ""
@@ -292,8 +319,10 @@ class MemoryDB:
                     """
                     INSERT INTO leads
                         (email_hash, company_domain, company_name, score, status,
-                         contacted_at, became_customer, pipeline_log, cost_usd)
-                    VALUES (?, ?, ?, ?, ?, ?, FALSE, ?, ?)
+                         contacted_at, became_customer, pipeline_log, cost_usd,
+                         pipeline_id, company_display, email_type, email_sent,
+                         duration_seconds)
+                    VALUES (?, ?, ?, ?, ?, ?, FALSE, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         email_hash,
@@ -304,6 +333,11 @@ class MemoryDB:
                         now,
                         pipeline_log_json,
                         round(blackboard.api_cost_usd, 6),
+                        blackboard.lead_id,
+                        blackboard.company,
+                        blackboard.email_type,
+                        email_sent,
+                        round(duration_seconds, 3),
                     ),
                 )
 
@@ -720,7 +754,7 @@ class MemoryDB:
 
         Returns:
             Dict mit total_cost_usd, total_leads, avg_cost_per_lead,
-            cost_today_usd, cost_this_month_usd.
+            cost_today_usd, leads_today, cost_this_month_usd.
         """
         try:
             now = datetime.now(timezone.utc)
@@ -735,28 +769,128 @@ class MemoryDB:
                         COALESCE(SUM(cost_usd), 0.0)  AS total_cost,
                         COALESCE(AVG(CASE WHEN cost_usd > 0 THEN cost_usd END), 0.0) AS avg_cost,
                         COALESCE(SUM(CASE WHEN contacted_at >= ? THEN cost_usd ELSE 0 END), 0.0) AS cost_today,
+                        COALESCE(SUM(CASE WHEN contacted_at >= ? THEN 1 ELSE 0 END), 0) AS leads_today,
                         COALESCE(SUM(CASE WHEN contacted_at >= ? THEN cost_usd ELSE 0 END), 0.0) AS cost_month
                     FROM leads
                     """,
-                    (today_start, month_start),
+                    (today_start, today_start, month_start),
                 ).fetchone()
 
             if row is None:
                 return {"total_cost_usd": 0.0, "total_leads": 0, "avg_cost_per_lead": 0.0,
-                        "cost_today_usd": 0.0, "cost_this_month_usd": 0.0}
+                        "cost_today_usd": 0.0, "leads_today": 0, "cost_this_month_usd": 0.0}
 
             return {
                 "total_cost_usd":     round(float(row["total_cost"]), 4),
                 "total_leads":        int(row["total_leads"]),
                 "avg_cost_per_lead":  round(float(row["avg_cost"]), 4),
                 "cost_today_usd":     round(float(row["cost_today"]), 4),
+                "leads_today":        int(row["leads_today"]),
                 "cost_this_month_usd": round(float(row["cost_month"]), 4),
             }
 
         except Exception as exc:
             logger.error("MemoryDB: get_cost_stats fehlgeschlagen: %s", type(exc).__name__, exc_info=True)
             return {"total_cost_usd": 0.0, "total_leads": 0, "avg_cost_per_lead": 0.0,
-                    "cost_today_usd": 0.0, "cost_this_month_usd": 0.0}
+                    "cost_today_usd": 0.0, "leads_today": 0, "cost_this_month_usd": 0.0}
+
+    def get_recent_leads(self, limit: int = 50) -> list[dict]:
+        """
+        Gibt die letzten verarbeiteten Leads fuer die GUI zurueck.
+
+        Enthaelt keine PII (keine E-Mail-Adressen, nur Firmennamen).
+
+        Args:
+            limit: Maximale Anzahl Leads (neueste zuerst).
+
+        Returns:
+            Liste von Lead-Dictionaries (neueste zuerst).
+        """
+        try:
+            with self._get_connection() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT id, pipeline_id, company_display, company_name, score,
+                           status, email_type, email_sent, duration_seconds,
+                           cost_usd, CAST(contacted_at AS TEXT) AS contacted_at
+                    FROM leads
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (max(1, limit),),
+                ).fetchall()
+
+            return [
+                {
+                    "lead_id": row["id"],
+                    "pipeline_id": row["pipeline_id"],
+                    "company": row["company_display"] or row["company_name"] or "unbekannt",
+                    "score": row["score"],
+                    "status": row["status"],
+                    "email_type": row["email_type"],
+                    "email_sent": bool(row["email_sent"]),
+                    "duration_seconds": float(row["duration_seconds"] or 0.0),
+                    "cost_usd": float(row["cost_usd"] or 0.0),
+                    "created_at": row["contacted_at"],
+                    "error": None,
+                }
+                for row in rows
+            ]
+
+        except Exception as exc:
+            logger.error(
+                "MemoryDB: get_recent_leads fehlgeschlagen: %s",
+                type(exc).__name__,
+                exc_info=True,
+            )
+            return []
+
+    def get_lead_by_pipeline_id(self, pipeline_id: str) -> Optional[dict]:
+        """
+        Holt einen Lead anhand seiner Pipeline-UUID (fuer den Status-Endpoint).
+
+        Args:
+            pipeline_id: UUID die der Orchestrator beim Pipeline-Start vergibt.
+
+        Returns:
+            Lead-Dictionary oder None wenn (noch) nicht vorhanden.
+        """
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    """
+                    SELECT id, pipeline_id, company_display, score, status,
+                           email_type, email_sent, duration_seconds, cost_usd,
+                           CAST(contacted_at AS TEXT) AS contacted_at
+                    FROM leads
+                    WHERE pipeline_id = ?
+                    """,
+                    (pipeline_id,),
+                ).fetchone()
+
+            if row is None:
+                return None
+
+            return {
+                "lead_id": row["id"],
+                "pipeline_id": row["pipeline_id"],
+                "company": row["company_display"],
+                "score": row["score"],
+                "status": row["status"],
+                "email_type": row["email_type"],
+                "email_sent": bool(row["email_sent"]),
+                "duration_seconds": float(row["duration_seconds"] or 0.0),
+                "cost_usd": float(row["cost_usd"] or 0.0),
+                "created_at": row["contacted_at"],
+            }
+
+        except Exception as exc:
+            logger.error(
+                "MemoryDB: get_lead_by_pipeline_id fehlgeschlagen: %s",
+                type(exc).__name__,
+                exc_info=True,
+            )
+            return None
 
     def check_duplicate_email(
         self, email: str, window_days: int = 30

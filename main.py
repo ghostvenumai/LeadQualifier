@@ -24,10 +24,13 @@ import hmac
 import logging
 import os
 import time
+import uuid
 from collections import defaultdict
-from typing import Any, Callable
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Callable, Optional
 
 from flask import Flask, jsonify, render_template, request
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from agents.orchestrator import OrchestratorAgent
 from core.config import Settings
@@ -52,6 +55,18 @@ app = Flask(__name__)
 settings = Settings()
 app.secret_key = settings.flask_secret_key
 
+# Hinter einem Reverse-Proxy (nginx, Traefik, Load-Balancer) muss
+# X-Forwarded-For ausgewertet werden, sonst sieht das Rate-Limiting nur die
+# Proxy-IP. TRUSTED_PROXY_COUNT gibt an, wie viele Proxy-Hops vertrauenswuerdig
+# sind (0 = kein Proxy, Header wird ignoriert).
+if settings.trusted_proxy_count > 0:
+    app.wsgi_app = ProxyFix(  # type: ignore[method-assign]
+        app.wsgi_app,
+        x_for=settings.trusted_proxy_count,
+        x_proto=settings.trusted_proxy_count,
+        x_host=settings.trusted_proxy_count,
+    )
+
 db = MemoryDB(settings.database_url.replace("sqlite:///", ""))
 db.init_db()
 
@@ -63,6 +78,14 @@ license_manager = LicenseManager(
 )
 
 orchestrator = OrchestratorAgent(settings=settings, db=db)
+
+# Background-Worker fuer den asynchronen Webhook-Modus (202 Accepted).
+# Die Pipeline-Ergebnisse landen in SQLite - der Status-Endpoint liest von dort,
+# funktioniert also auch mit mehreren Gunicorn-Workern.
+_pipeline_executor = ThreadPoolExecutor(
+    max_workers=int(os.getenv("PIPELINE_WORKERS", "4")),
+    thread_name_prefix="pipeline",
+)
 
 # ---------------------------------------------------------------------------
 # Rate-Limiting (einfaches In-Memory Dict: IP -> [timestamps])
@@ -166,8 +189,43 @@ def require_admin(view: Callable) -> Callable:
     return wrapper
 
 
-# In-Memory Lead-Store fuer GUI (wird bei Neustart geleert — DB ist die Quelle)
-_recent_leads: list[dict] = []
+# ---------------------------------------------------------------------------
+# Background-Pipeline (Async-Webhook-Modus)
+# ---------------------------------------------------------------------------
+def _run_pipeline_job(
+    lead_input: LeadInput,
+    lead_id: str,
+    license_key: Optional[str],
+) -> None:
+    """
+    Fuehrt die Pipeline im Background-Thread aus (Async-Webhook-Modus).
+
+    Das Ergebnis wird vom Orchestrator in SQLite persistiert; der
+    Status-Endpoint /api/leads/<lead_id>/status liest von dort.
+
+    Args:
+        lead_input: Validierter Lead aus dem Webhook.
+        lead_id: Vorab vergebene Pipeline-UUID (bereits an den Aufrufer
+            zurueckgegeben).
+        license_key: Lizenzschluessel fuer den Nutzungszaehler.
+    """
+    try:
+        result: PipelineResult = asyncio.run(
+            orchestrator.run(lead_input, lead_id=lead_id)
+        )
+        license_manager.increment_usage(license_key)
+        logger.info(
+            "Background-Pipeline abgeschlossen: lead_id=%s score=%s",
+            lead_id,
+            result.score,
+        )
+    except Exception as exc:
+        logger.error(
+            "Background-Pipeline fehlgeschlagen fuer lead_id=%s: %s",
+            lead_id,
+            type(exc).__name__,
+            exc_info=True,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -210,27 +268,48 @@ def ui_settings() -> str:
 
 @app.get("/api/leads/recent")
 def api_leads_recent() -> tuple[Any, int]:
-    """Gibt die letzten N verarbeiteten Leads zurueck (kein PII)."""
-    limit = min(int(request.args.get("limit", 50)), 200)
-    return jsonify({"success": True, "leads": _recent_leads[-limit:]}), 200
+    """Gibt die letzten N verarbeiteten Leads aus der Datenbank zurueck (kein PII)."""
+    try:
+        limit = min(int(request.args.get("limit", 50)), 200)
+    except ValueError:
+        return _error("Ungueltiger limit-Parameter.", 400)
+    # GUI erwartet aelteste zuerst (haengt unten an) - DB liefert neueste zuerst
+    leads = list(reversed(db.get_recent_leads(limit=limit)))
+    return jsonify({"success": True, "leads": leads}), 200
+
+
+@app.get("/api/leads/<pipeline_id>/status")
+def api_lead_status(pipeline_id: str) -> tuple[Any, int]:
+    """
+    Status-Endpoint fuer den asynchronen Webhook-Modus.
+
+    Liefert "completed" mit dem Ergebnis sobald die Pipeline den Lead in die
+    Datenbank geschrieben hat, sonst "processing". Eine unbekannte ID ist von
+    "processing" nicht unterscheidbar - Aufrufer sollten ein Client-Timeout
+    setzen.
+    """
+    lead = db.get_lead_by_pipeline_id(pipeline_id)
+    if lead is not None:
+        return jsonify({"success": True, "status": "completed", "lead": lead}), 200
+    return jsonify({"success": True, "status": "processing", "lead": None}), 200
 
 
 @app.get("/api/costs")
 def api_costs() -> tuple[Any, int]:
-    """Gibt aggregierte API-Kostenstatistiken zurueck."""
-    # Aus DB (persistente Werte inkl. vergangener Sitzungen)
+    """Gibt aggregierte API-Kostenstatistiken aus der Datenbank zurueck."""
     db_stats = db.get_cost_stats()
 
-    # Live-Werte aus dem aktuellen In-Memory-Store
-    session_cost = sum(l.get("cost_usd", 0.0) for l in _recent_leads)
-    session_leads = len(_recent_leads)
+    today_cost = db_stats.get("cost_today_usd", 0.0)
+    today_leads = db_stats.get("leads_today", 0)
 
     return jsonify({
         "success": True,
+        # "session" = heutige Werte (DB-basiert, ueberlebt Neustarts und
+        # funktioniert mit mehreren Workern)
         "session": {
-            "cost_usd": round(session_cost, 4),
-            "leads": session_leads,
-            "avg_per_lead": round(session_cost / session_leads, 4) if session_leads else 0.0,
+            "cost_usd": round(today_cost, 4),
+            "leads": today_leads,
+            "avg_per_lead": round(today_cost / today_leads, 4) if today_leads else 0.0,
         },
         "total": db_stats,
     }), 200
@@ -329,7 +408,27 @@ def webhook_lead() -> tuple[Any, int]:
             "last_status": company_dup.get("status"),
         }), 409
 
-    # Pipeline starten
+    # Async-Modus: sofort 202 zurueckgeben, Pipeline laeuft im Hintergrund.
+    # Default kommt aus WEBHOOK_ASYNC_MODE, pro Request via ?async=1 / ?sync=1
+    # uebersteuerbar (z.B. GUI-Tester nutzt den synchronen Pfad).
+    wants_async = settings.webhook_async_mode
+    if request.args.get("async") is not None:
+        wants_async = True
+    if request.args.get("sync") is not None:
+        wants_async = False
+
+    if wants_async:
+        lead_id = str(uuid.uuid4())
+        _pipeline_executor.submit(_run_pipeline_job, lead_input, lead_id, license_key)
+        logger.info("Pipeline im Hintergrund gestartet: lead_id=%s", lead_id)
+        return jsonify({
+            "success": True,
+            "accepted": True,
+            "lead_id": lead_id,
+            "status_url": f"/api/leads/{lead_id}/status",
+        }), 202
+
+    # Synchroner Modus: Pipeline blockierend ausfuehren
     logger.info("Pipeline gestartet fuer Lead (company masked)")
     try:
         result: PipelineResult = asyncio.run(orchestrator.run(lead_input))
@@ -339,22 +438,6 @@ def webhook_lead() -> tuple[Any, int]:
 
     # Lead-Zaehler erhoehen
     license_manager.increment_usage(license_key)
-
-    # GUI-Store aktualisieren (kein PII — nur company, score, type)
-    from datetime import datetime as _dt
-    _recent_leads.append({
-        "lead_id": result.lead_id,
-        "company": lead_input.company,
-        "score": result.score,
-        "email_type": result.email_type,
-        "email_sent": result.email_sent,
-        "duration_seconds": round(result.duration_seconds, 2),
-        "cost_usd": result.cost_usd,
-        "created_at": _dt.now().isoformat(),
-        "error": result.error,
-    })
-    if len(_recent_leads) > 500:
-        _recent_leads.pop(0)
 
     # Onboarding-Mail nach erstem Lead (Demo)
     onboarding_msg = None
@@ -379,9 +462,10 @@ def webhook_lead() -> tuple[Any, int]:
     if onboarding_msg:
         response_data["onboarding_message"] = onboarding_msg
 
-    status_code = 200 if result.email_sent else 207
+    # Immer 200: Teil-Fehler (z.B. E-Mail nicht gesendet) stehen in
+    # email_sent/error im Body. 207 Multi-Status waere hier semantisch falsch.
     logger.info("Pipeline abgeschlossen: lead_id=%s score=%s", result.lead_id, result.score)
-    return jsonify(response_data), status_code
+    return jsonify(response_data), 200
 
 
 @app.get("/api/settings/config")
@@ -487,6 +571,10 @@ def api_feedback() -> tuple[Any, int]:
     Erwartet JSON:
       { "lead_id": 1, "actual_outcome": "converted" | "rejected" | "no_response" }
     """
+    client_ip = request.remote_addr or "unknown"
+    if _is_rate_limited(client_ip):
+        return _error("Rate-Limit ueberschritten. Maximal 10 Anfragen pro Minute.", 429)
+
     data = request.get_json(silent=True)
     if not data:
         return _error("Kein gueltiger JSON-Body.", 400)

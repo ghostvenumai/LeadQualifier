@@ -63,8 +63,41 @@ class Settings:
 
     @cached_property
     def claude_agent_model(self) -> str:
-        """Claude-Modell fuer Research, Scoring und Reviewer Agents."""
+        """Claude-Modell fuer Research- und Scoring-Agent."""
         return os.getenv("CLAUDE_AGENT_MODEL", "claude-sonnet-4-6")
+
+    @cached_property
+    def claude_reviewer_model(self) -> str:
+        """
+        Claude-Modell fuer den Reviewer Agent.
+        Default: Haiku 4.5 - die Qualitaetspruefung ist eine einfache
+        Klassifikationsaufgabe, Haiku reicht dafuer und kostet ~1/3 von Sonnet.
+        """
+        return os.getenv("CLAUDE_REVIEWER_MODEL", "claude-haiku-4-5")
+
+    @cached_property
+    def anthropic_max_retries(self) -> int:
+        """
+        Anzahl automatischer SDK-Retries bei 429/5xx/Verbindungsfehlern.
+        Default: 3.
+        """
+        try:
+            return max(0, int(os.getenv("ANTHROPIC_MAX_RETRIES", "3")))
+        except ValueError:
+            logger.warning("Ungueltiger ANTHROPIC_MAX_RETRIES-Wert. Fallback auf 3.")
+            return 3
+
+    @cached_property
+    def anthropic_timeout_seconds(self) -> float:
+        """
+        Request-Timeout fuer Claude-API-Aufrufe in Sekunden.
+        Default: 60 Sekunden.
+        """
+        try:
+            return max(1.0, float(os.getenv("ANTHROPIC_TIMEOUT_SECONDS", "60")))
+        except ValueError:
+            logger.warning("Ungueltiger ANTHROPIC_TIMEOUT_SECONDS-Wert. Fallback auf 60.")
+            return 60.0
 
     # -------------------------------------------------------------------------
     # SLACK
@@ -219,6 +252,30 @@ class Settings:
         Optional - wenn nicht gesetzt, werden Webhooks nicht signiert geprueft.
         """
         return os.getenv("WEBHOOK_SECRET") or None
+
+    @cached_property
+    def webhook_async_mode(self) -> bool:
+        """
+        Wenn True, antwortet POST /webhook/lead sofort mit 202 Accepted und
+        die Pipeline laeuft im Hintergrund (Status via /api/leads/<id>/status).
+        Default: False (synchron, abwaertskompatibel).
+        Pro Request uebersteuerbar via Query-Parameter ?async=1 bzw. ?sync=1.
+        """
+        return os.getenv("WEBHOOK_ASYNC_MODE", "false").strip().lower() in {"1", "true", "yes"}
+
+    @cached_property
+    def trusted_proxy_count(self) -> int:
+        """
+        Anzahl vertrauenswuerdiger Reverse-Proxies vor der App.
+        Wenn > 0, wird X-Forwarded-For via ProxyFix ausgewertet, damit
+        Rate-Limiting und Logging die echte Client-IP sehen.
+        Default: 0 (kein Proxy).
+        """
+        try:
+            return max(0, int(os.getenv("TRUSTED_PROXY_COUNT", "0")))
+        except ValueError:
+            logger.warning("Ungueltiger TRUSTED_PROXY_COUNT-Wert. Fallback auf 0.")
+            return 0
 
     # -------------------------------------------------------------------------
     # LOGGING
