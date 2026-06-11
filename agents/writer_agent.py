@@ -106,7 +106,7 @@ class WriterAgent:
         """
         self._blackboard = blackboard
         self._settings = settings
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     async def write(self) -> EmailDraft:
         """
@@ -216,7 +216,7 @@ class WriterAgent:
                 message=bb.message,
             )
 
-        response = self._client.messages.create(
+        response = await self._client.messages.create(
             model=self._settings.claude_writer_model,
             max_tokens=1000,
             system=system_prompt,

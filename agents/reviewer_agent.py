@@ -116,7 +116,7 @@ class ReviewerAgent:
         self._blackboard = blackboard
         self._settings = settings
         self._writer_agent = writer_agent
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     async def review(self) -> bool:
         """
@@ -241,7 +241,7 @@ class ReviewerAgent:
                 max_words=_MAX_WORDS,
             )
 
-            response = self._client.messages.create(
+            response = await self._client.messages.create(
                 model=self._settings.claude_agent_model,
                 max_tokens=600,
                 system=_pm.get("reviewer_system"),
