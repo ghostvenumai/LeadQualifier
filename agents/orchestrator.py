@@ -95,7 +95,9 @@ class OrchestratorAgent:
             blackboard.log("OrchestratorAgent", "phase1_parallel_start")
 
             research_agent = ResearchAgent(blackboard=blackboard, settings=self._settings)
-            scoring_agent = ScoringAgent(blackboard=blackboard, settings=self._settings)
+            scoring_agent = ScoringAgent(
+                blackboard=blackboard, settings=self._settings, db=self._db
+            )
 
             research_result, score_result = await asyncio.gather(
                 research_agent.research(),

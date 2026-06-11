@@ -21,13 +21,16 @@ Kriterien und Punktgewichtung:
 
 import json
 import logging
-from typing import Any
+from typing import Any, Optional, TYPE_CHECKING
 
 import anthropic
 
 from core.blackboard import LeadBlackboard
 from core.config import Settings
 from core.models import ScoreResult
+
+if TYPE_CHECKING:
+    from core.memory import MemoryDB
 
 logger = logging.getLogger(__name__)
 
@@ -121,17 +124,25 @@ class ScoringAgent:
     und blackboard.score_reasoning gespeichert.
     """
 
-    def __init__(self, blackboard: LeadBlackboard, settings: Settings) -> None:
+    def __init__(
+        self,
+        blackboard: LeadBlackboard,
+        settings: Settings,
+        db: Optional["MemoryDB"] = None,
+    ) -> None:
         """
         Initialisiert den ScoringAgent.
 
         Args:
             blackboard: Das gemeinsame Blackboard-Objekt der aktuellen Pipeline.
             settings: Konfigurationsobjekt mit API-Keys und Modell-Namen.
+            db: Optionale MemoryDB-Instanz. Wenn gesetzt, werden Kalibrierungs-
+                Hinweise aus dem Scoring-Feedback in den Prompt injiziert.
         """
         self._blackboard = blackboard
         self._settings = settings
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self._db = db
+        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     def _build_user_prompt(self) -> str:
         """
@@ -170,7 +181,7 @@ class ScoringAgent:
         else:
             is_hiring_label = "Unbekannt (nicht ermittelbar)"
 
-        return _USER_PROMPT_TEMPLATE.format(
+        prompt = _USER_PROMPT_TEMPLATE.format(
             company=bb.company,
             contact_name=bb.name,
             message=bb.message,
@@ -184,6 +195,77 @@ class ScoringAgent:
             is_hiring=is_hiring_label,
             open_positions_count=open_positions,
         )
+
+        calibration_hint = self._build_calibration_hint()
+        if calibration_hint:
+            prompt += "\n" + calibration_hint
+
+        return prompt
+
+    def _build_calibration_hint(self) -> str:
+        """
+        Erstellt Kalibrierungs-Hinweise aus dem gesammelten Scoring-Feedback.
+
+        Liest aggregierte Statistiken (vorhergesagter Score vs. tatsaechliches
+        Ergebnis) aus der MemoryDB und formatiert sie als Prompt-Abschnitt.
+        Es fliessen nur numerische Aggregate ein - keine Lead-Daten (DSGVO,
+        keine Prompt-Injection-Flaeche).
+
+        Returns:
+            Formatierter Hinweis-Block oder leerer String wenn keine DB
+            vorhanden ist oder zu wenige Feedback-Datenpunkte existieren.
+        """
+        if self._db is None:
+            return ""
+
+        try:
+            stats = self._db.get_scoring_calibration(
+                qualify_threshold=self._settings.qualify_threshold,
+            )
+        except Exception as exc:
+            logger.warning(
+                "ScoringAgent: Kalibrierung nicht ladbar: %s", type(exc).__name__
+            )
+            return ""
+
+        if not stats:
+            return ""
+
+        threshold = self._settings.qualify_threshold
+        lines = [
+            "## Kalibrierung aus realem Vertriebs-Feedback "
+            f"(n={stats['sample_count']} bewertete Leads)",
+        ]
+        if stats["avg_score_converted"] is not None:
+            lines.append(
+                f"- Durchschnittlicher Score spaeter KONVERTIERTER Leads: "
+                f"{stats['avg_score_converted']:.1f}"
+            )
+        if stats["avg_score_not_converted"] is not None:
+            lines.append(
+                f"- Durchschnittlicher Score NICHT konvertierter Leads: "
+                f"{stats['avg_score_not_converted']:.1f}"
+            )
+        if stats["qualified_total"] > 0:
+            lines.append(
+                f"- {stats['false_positives']} von {stats['qualified_total']} Leads "
+                f"mit Score >= {threshold} haben NICHT konvertiert"
+                + (
+                    " -> sei bei Grenzfaellen strenger"
+                    if stats["false_positives"] * 2 > stats["qualified_total"]
+                    else ""
+                )
+            )
+        if stats["false_negatives"] > 0:
+            lines.append(
+                f"- {stats['false_negatives']} Lead(s) mit Score < {threshold} "
+                f"haben trotzdem konvertiert -> pruefe Grenzfaelle wohlwollend"
+            )
+        lines.append(
+            "Nutze diese Kalibrierung nur bei Grenzfaellen - "
+            "die Punktwerte der Kriterien bleiben unveraendert."
+        )
+        return "\n".join(lines)
 
     def _parse_claude_response(self, raw_text: str) -> dict[str, Any]:
         """
@@ -252,7 +334,7 @@ class ScoringAgent:
         try:
             user_prompt = self._build_user_prompt()
 
-            response = self._client.messages.create(
+            response = await self._client.messages.create(
                 model=self._settings.claude_agent_model,
                 max_tokens=1500,
                 system=_pm.get("scoring_system"),

@@ -570,8 +570,8 @@ class MemoryDB:
     def save_scoring_feedback(
         self,
         lead_id: int,
-        predicted_score: int,
-        actual_outcome: str,
+        predicted_score: Optional[int] = None,
+        actual_outcome: str = "no_response",
     ) -> None:
         """
         Speichert Feedback zum Scoring fuer spaetere Analyse.
@@ -581,13 +581,21 @@ class MemoryDB:
 
         Args:
             lead_id: Datenbank-ID des Leads.
-            predicted_score: Urspruenglich vorhergesagter Score.
-            actual_outcome: Tatsaechliches Ergebnis (z.B. "customer", "no_response").
+            predicted_score: Urspruenglich vorhergesagter Score. Wenn None,
+                wird der Score des Leads aus der leads-Tabelle geladen.
+            actual_outcome: Tatsaechliches Ergebnis (z.B. "converted", "no_response").
         """
         try:
             now = datetime.now(timezone.utc).isoformat()
 
             with self._get_connection() as conn:
+                if predicted_score is None:
+                    row = conn.execute(
+                        "SELECT score FROM leads WHERE id = ?",
+                        (lead_id,),
+                    ).fetchone()
+                    predicted_score = int(row["score"]) if row and row["score"] is not None else 0
+
                 conn.execute(
                     """
                     INSERT INTO scoring_feedback
@@ -607,6 +615,75 @@ class MemoryDB:
                 type(exc).__name__,
                 exc_info=True,
             )
+
+    def get_scoring_calibration(
+        self,
+        qualify_threshold: int = 7,
+        min_samples: int = 5,
+    ) -> Optional[dict]:
+        """
+        Aggregiert das Scoring-Feedback zu Kalibrierungs-Statistiken.
+
+        Vergleicht vorhergesagte Scores mit den tatsaechlichen Ergebnissen
+        ("converted" vs. "rejected"/"no_response"). Die Aggregate werden vom
+        ScoringAgent als Kalibrierungs-Hinweis in den Prompt injiziert -
+        damit ist der Feedback-Loop geschlossen.
+
+        Args:
+            qualify_threshold: Score ab dem ein Lead als qualifiziert gilt.
+            min_samples: Mindestanzahl Feedback-Eintraege bevor Statistiken
+                zurueckgegeben werden (zu kleine Stichproben verzerren).
+
+        Returns:
+            Dict mit sample_count, avg_score_converted, avg_score_not_converted,
+            false_positives, qualified_total und false_negatives -
+            oder None wenn weniger als min_samples Eintraege existieren.
+        """
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    """
+                    SELECT
+                        COUNT(*) AS n,
+                        AVG(CASE WHEN actual_outcome = 'converted'
+                            THEN predicted_score END) AS avg_conv,
+                        AVG(CASE WHEN actual_outcome != 'converted'
+                            THEN predicted_score END) AS avg_not_conv,
+                        SUM(CASE WHEN predicted_score >= ? AND actual_outcome != 'converted'
+                            THEN 1 ELSE 0 END) AS false_positives,
+                        SUM(CASE WHEN predicted_score >= ?
+                            THEN 1 ELSE 0 END) AS qualified_total,
+                        SUM(CASE WHEN predicted_score < ? AND actual_outcome = 'converted'
+                            THEN 1 ELSE 0 END) AS false_negatives
+                    FROM scoring_feedback
+                    WHERE predicted_score > 0
+                    """,
+                    (qualify_threshold, qualify_threshold, qualify_threshold),
+                ).fetchone()
+
+            if row is None or int(row["n"]) < min_samples:
+                return None
+
+            return {
+                "sample_count": int(row["n"]),
+                "avg_score_converted": (
+                    float(row["avg_conv"]) if row["avg_conv"] is not None else None
+                ),
+                "avg_score_not_converted": (
+                    float(row["avg_not_conv"]) if row["avg_not_conv"] is not None else None
+                ),
+                "false_positives": int(row["false_positives"] or 0),
+                "qualified_total": int(row["qualified_total"] or 0),
+                "false_negatives": int(row["false_negatives"] or 0),
+            }
+
+        except Exception as exc:
+            logger.error(
+                "MemoryDB: get_scoring_calibration fehlgeschlagen: %s",
+                type(exc).__name__,
+                exc_info=True,
+            )
+            return None
 
     def hash_email(self, email: str) -> str:
         """
