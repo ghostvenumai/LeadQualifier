@@ -17,7 +17,6 @@ DSGVO-Hinweis:
 import logging
 import re
 from typing import Any, Optional
-from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -222,9 +221,9 @@ class ResearchAgent:
         """
         bb = self._blackboard
 
-        # 1. E-Mail-Domain pruefen
+        # 1. E-Mail-Domain ermitteln (Basis fuer Website-Ableitung;
+        #    die Professionell-Pruefung macht der ScoringAgent selbst)
         email_domain = self._extract_email_domain(bb.email)
-        is_professional_email = self._is_professional_domain(email_domain)
 
         # 2. Website-URL ermitteln
         website_url = self._derive_website_url(email_domain, bb.company)

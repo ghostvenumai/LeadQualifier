@@ -11,10 +11,8 @@ Verschluesselungsformat:
 """
 
 import base64
-import json
 import logging
 import os
-from typing import Optional
 
 import httpx
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM

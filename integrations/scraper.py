@@ -11,7 +11,6 @@ DSGVO-Hinweis:
 
 import logging
 import re
-from typing import Optional
 from urllib.parse import urljoin, urlparse
 
 import httpx
