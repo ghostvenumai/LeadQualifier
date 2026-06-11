@@ -1,0 +1,27 @@
+services:
+  leadqualifier:
+    build: .
+    container_name: leadqualifier
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      # SQLite im Volume (ueberlebt Container-Neustarts)
+      DATABASE_URL: sqlite:////app/data/leadqualifier.db
+      # Produktionsempfehlung: Webhook asynchron (202 + Status-Polling)
+      WEBHOOK_ASYNC_MODE: "true"
+      # Hinter nginx/Traefik auf 1 setzen, damit Rate-Limiting die echte
+      # Client-IP sieht
+      TRUSTED_PROXY_COUNT: "0"
+    volumes:
+      - leadqualifier-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  leadqualifier-data:

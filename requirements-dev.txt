@@ -1,0 +1,6 @@
+# LeadQualifier AI - Entwicklungs- und Test-Dependencies
+-r requirements.txt
+
+pytest>=8.0,<9
+pytest-asyncio>=0.23,<1
+ruff>=0.4

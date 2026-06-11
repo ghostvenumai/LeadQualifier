@@ -1,0 +1,12 @@
+# Ruff-Konfiguration fuer LeadQualifier AI
+target-version = "py311"
+line-length = 110
+
+[lint]
+# Fokus auf echte Fehler: Pyflakes (F) + Syntax/Runtime-Fehler (E9)
+# Stilregeln bewusst lax - Bestandscode soll nicht umformatiert werden
+select = ["F", "E9"]
+
+[lint.per-file-ignores]
+# Test-Hilfsimporte innerhalb von Funktionen sind ok
+"tests/*" = ["F401"]

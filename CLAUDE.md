@@ -61,7 +61,7 @@ Eingehender Webhook (POST /webhook/lead)
            |
            v
    OUTPUT
-   - E-Mail-Versand via Gmail API
+   - E-Mail-Versand via Gmail SMTP (App-Passwort)
    - Slack-Alert (AES-256-GCM verschluesselt)
    - CRM-Webhook-Update
    - SQLite-Persistenz
@@ -117,11 +117,12 @@ Der Scoring Agent bewertet jeden Lead nach 12 Kriterien. Jedes Kriterium wird mi
 | Web-Framework | Flask >= 3.0.0 |
 | AI-API | Anthropic Claude API |
 | Writer Agent Modell | claude-opus-4-6 (beste Qualitaet) |
-| Alle anderen Agents | claude-sonnet-4-6 |
+| Research + Scoring Agents | claude-sonnet-4-6 |
+| Reviewer Agent Modell | claude-haiku-4-5 (Klassifikation, guenstig) |
 | Async | asyncio + asyncio.gather() |
 | Datenvalidierung | Pydantic v2 |
 | Datenbank | SQLite (via direktes sqlite3) |
-| E-Mail-Versand | Gmail API (google-api-python-client) |
+| E-Mail-Versand | Gmail SMTP mit App-Passwort (smtplib) |
 | Verschluesselung | AES-256-GCM (cryptography-Library) |
 | HTTP-Client | httpx (async) + requests |
 | Web-Scraping | beautifulsoup4 |
@@ -217,7 +218,7 @@ LeadQualifier/
 │   └── reviewer.py         # Qualitaets-Review
 ├── integrations/
 │   ├── __init__.py
-│   ├── gmail.py            # Gmail API Wrapper
+│   ├── gmail_client.py     # Gmail SMTP Client (App-Passwort)
 │   ├── slack.py            # Slack Alerts (AES-256-GCM)
 │   ├── crm.py              # CRM Webhook Client
 │   └── license.py          # Lizenz-Validierung
@@ -276,4 +277,8 @@ LeadQualifier/
 4. Der `research`-Dict im Blackboard sollte immer alle Schluesseln aus `ResearchData` enthalten
 5. `asyncio.gather()` fuer Research + Scoring ist Pflicht (Parallelitaet = Performance)
 6. Claude Opus 4.6 NUR fuer Writer Agent (teurer aber beste Qualitaet)
-7. Alle anderen Agents: Claude Sonnet 4.6 (schneller und kostenguenstiger)
+7. Research/Scoring: Claude Sonnet 4.6 - Reviewer: Claude Haiku 4.5 (CLAUDE_REVIEWER_MODEL)
+8. Alle Claude-Aufrufe laufen ueber AsyncAnthropic mit Tool-Use-JSON (erzwungenes Schema)
+9. Admin-Endpunkte (/api/settings/*, /api/prompts) erfordern ADMIN_TOKEN bzw. localhost
+10. Async-Webhook: WEBHOOK_ASYNC_MODE=true -> 202 + GET /api/leads/<id>/status
+11. Produktion: gunicorn -c gunicorn.conf.py main:app bzw. docker compose up -d

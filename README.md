@@ -31,13 +31,18 @@ LeadQualifier AI empfängt eingehende B2B-Kontaktanfragen über einen Webhook, b
 
 - **5 KI-Agents** arbeiten parallel: Research, Scoring, Writer, Reviewer, Orchestrator
 - **12-Kriterien-Scoring** — jeder Lead wird präzise von 1–10 bewertet
+- **Strukturierter JSON-Output** — erzwungenes Tool-Use-Schema, keine Parse-Fehler
+- **Selbstlernender Feedback-Loop** — reale Vertriebsergebnisse kalibrieren das Scoring
 - **Duplikat-Erkennung** — erkennt automatisch ob eine Firma oder E-Mail bereits eingereicht wurde
 - **Hiring-Erkennung** — prüft ob die Firma gerade Mitarbeiter sucht (Website + Indeed)
 - **Personalisierte E-Mails** via Claude Opus 4.6 (beste Modellqualität)
+- **Asynchroner Webhook** — 202 Accepted + Status-Polling, kein Timeout bei Zapier & Co.
 - **DSGVO-konform** — keine E-Mail-Adressen in Logs oder Datenbank
 - **Gmail SMTP** — kein OAuth, einfache Einrichtung per App-Passwort
 - **Slack-Alerts** mit AES-256-GCM Verschlüsselung
+- **Admin-Authentifizierung** — Konfigurations-API per Token geschützt
 - **Web-Dashboard** mit Dunkel/Hell-Modus und Mehrsprachigkeit (DE/EN/ES)
+- **Produktionsbereit** — Docker, Gunicorn, CI (pytest + ruff), 99 Tests
 - **Demo-Modus** — sofort einsatzbereit, ohne Lizenzschlüssel
 
 ---
@@ -151,14 +156,16 @@ POST /webhook/lead
 
 | Komponente | Technologie |
 |---|---|
-| Backend | Python 3.11+ · Flask 3.0 |
-| KI | Anthropic Claude API (Opus 4.6 + Sonnet 4.6) |
-| Datenbank | SQLite — lokal, DSGVO-konform |
+| Backend | Python 3.11+ · Flask 3.0 · Gunicorn |
+| KI | Anthropic Claude API — Opus 4.6 (Writer) · Sonnet 4.6 (Research/Scoring) · Haiku 4.5 (Reviewer) |
+| KI-Robustheit | AsyncAnthropic · automatische Retries · Tool-Use-JSON-Schema |
+| Datenbank | SQLite (WAL) — lokal, DSGVO-konform |
 | E-Mail | Gmail SMTP mit App-Passwort |
 | Verschlüsselung | AES-256-GCM (Slack-Payloads) |
 | Web-Scraping | httpx · BeautifulSoup4 |
 | Validierung | Pydantic v2 |
-| Tests | pytest · pytest-asyncio |
+| Deployment | Docker · docker-compose · Healthchecks |
+| Qualität | pytest (99 Tests) · ruff · GitHub Actions CI |
 
 ---
 
@@ -220,8 +227,58 @@ Alle Einstellungen können über das **Web-Dashboard** unter `/settings` gesetzt
 | `SLACK_WEBHOOK_URL` | Slack Incoming Webhook | Optional |
 | `SLACK_ENCRYPTION_KEY` | AES-256-GCM Key (64-Hex) | Optional |
 | `CRM_WEBHOOK_URL` | HubSpot / Pipedrive Webhook | Optional |
-| `WEBHOOK_SECRET` | HMAC-SHA256 Signatur-Secret | Optional |
+| `WEBHOOK_SECRET` | HMAC-SHA256 Signatur-Secret | Produktion ✅ |
+| `ADMIN_TOKEN` | Token für Konfigurations-API (`X-Admin-Token`-Header) | Produktion ✅ |
+| `WEBHOOK_ASYNC_MODE` | `true` = Webhook antwortet sofort mit 202 | Optional |
+| `TRUSTED_PROXY_COUNT` | Anzahl Reverse-Proxies vor der App (X-Forwarded-For) | Optional |
 | `QUALIFY_THRESHOLD` | Score-Schwellenwert (1–10, default: 7) | Optional |
+| `CLAUDE_REVIEWER_MODEL` | Modell für den Reviewer (default: Haiku 4.5) | Optional |
+
+Alle weiteren Variablen (Timeouts, Retries, Worker-Anzahl) sind in `.env.example` dokumentiert.
+
+---
+
+## Produktivbetrieb
+
+### Docker (empfohlen)
+
+```bash
+cp .env.example .env   # Secrets eintragen
+docker compose up -d
+```
+
+Die SQLite-Datenbank liegt im Volume `leadqualifier-data` und überlebt Container-Neustarts. Der Container läuft als Non-Root-User mit Healthcheck.
+
+### Gunicorn (ohne Docker)
+
+```bash
+pip install -r requirements.txt
+gunicorn -c gunicorn.conf.py main:app
+```
+
+### Asynchroner Webhook
+
+Webhook-Quellen wie Zapier oder HubSpot brechen nach wenigen Sekunden ab — die Pipeline braucht aber 30–60 s. Mit `WEBHOOK_ASYNC_MODE=true` (oder pro Request `?async=1`) antwortet der Webhook sofort:
+
+```json
+HTTP 202 Accepted
+{
+  "success": true,
+  "accepted": true,
+  "lead_id": "7f3b9c4e-...",
+  "status_url": "/api/leads/7f3b9c4e-.../status"
+}
+```
+
+Das Ergebnis liefert anschließend `GET /api/leads/<lead_id>/status` — erst `"processing"`, dann `"completed"` inklusive Score, E-Mail-Typ und Kosten.
+
+### Sicherheits-Checkliste für den Produktivbetrieb
+
+1. `WEBHOOK_SECRET` setzen (HMAC-Signaturpflicht für eingehende Leads)
+2. `ADMIN_TOKEN` setzen (sonst sind die Settings-Endpunkte nur von localhost erreichbar)
+3. `FLASK_SECRET_KEY` setzen
+4. Hinter Reverse-Proxy: `TRUSTED_PROXY_COUNT=1` für korrektes Rate-Limiting
+5. TLS über den Reverse-Proxy terminieren (nginx, Traefik, Caddy)
 
 ---
 
@@ -240,9 +297,9 @@ Das eingebaute Web-Dashboard bietet:
 
 ## Lizenz
 
-LeadQualifier AI ist **Open Source** — kein Lizenzschlüssel, keine Lead-Begrenzung, keine Zeitbeschränkung.
+LeadQualifier AI läuft ohne Lizenzschlüssel im **Demo-Modus** (10 Leads oder 14 Tage — die Limits sind via `DEMO_MAX_LEADS` / `DEMO_MAX_DAYS` konfigurierbar). Einfach klonen, API-Key eintragen, starten.
 
-Einfach klonen, API-Key eintragen, starten.
+Für den unbegrenzten Produktiveinsatz: **Vollversion auf Anfrage** — siehe [LICENSE](LICENSE) und Preismodelle im Dashboard unter `/settings`.
 
 ---
 
