@@ -9,6 +9,7 @@ import hashlib
 import logging
 import socket
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 import requests
@@ -53,12 +54,66 @@ class LicenseManager:
         return self._check_full(key)
 
     def _check_demo(self) -> LicenseInfo:
-        """Open-Source-Modus: kein Lizenzkey gesetzt → unlimitiert aktiv."""
+        """
+        Demo-Modus: laeuft ab nach demo_max_leads Leads ODER demo_max_days
+        Tagen - was zuerst eintritt.
+
+        Existiert noch kein Lizenz-Eintrag (frische Installation), gilt das
+        volle Demo-Kontingent. Limits sind via DEMO_MAX_LEADS / DEMO_MAX_DAYS
+        konfigurierbar.
+
+        Returns:
+            LicenseInfo mit verbleibenden Leads/Tagen bzw. Ablauf-Grund.
+        """
+        license_data = self.db.get_license("demo") or {}
+        leads_used = int(license_data.get("leads_used") or 0)
+
+        days_elapsed = 0
+        created_at_raw = license_data.get("created_at")
+        if created_at_raw:
+            try:
+                created_at = datetime.fromisoformat(str(created_at_raw))
+                now = (
+                    datetime.now(timezone.utc)
+                    if created_at.tzinfo is not None
+                    else datetime.now()
+                )
+                days_elapsed = max(0, (now - created_at).days)
+            except (ValueError, TypeError):
+                logger.warning("LicenseManager: Ungueltiges created_at-Format im Demo-Eintrag.")
+
+        leads_remaining = max(0, self.demo_max_leads - leads_used)
+        days_remaining = max(0, self.demo_max_days - days_elapsed)
+
+        if leads_used >= self.demo_max_leads:
+            return LicenseInfo(
+                type="demo",
+                active=False,
+                leads_remaining=0,
+                days_remaining=days_remaining,
+                reason=(
+                    f"Demo-Limit erreicht ({self.demo_max_leads} Leads). "
+                    f"Vollversion auf Anfrage."
+                ),
+            )
+
+        if days_elapsed >= self.demo_max_days:
+            return LicenseInfo(
+                type="demo",
+                active=False,
+                leads_remaining=leads_remaining,
+                days_remaining=0,
+                reason=(
+                    f"Demo-Zeitraum abgelaufen ({self.demo_max_days} Tage). "
+                    f"Vollversion auf Anfrage."
+                ),
+            )
+
         return LicenseInfo(
-            type="professional",
+            type="demo",
             active=True,
-            leads_remaining=None,
-            days_remaining=None,
+            leads_remaining=leads_remaining,
+            days_remaining=days_remaining,
         )
 
     def _check_full(self, key: str) -> LicenseInfo:
