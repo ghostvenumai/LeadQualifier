@@ -7,7 +7,6 @@ Orchestrator -> Research + Scoring (parallel) -> Writer -> Reviewer -> Output
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
 
 @dataclass
@@ -88,11 +87,11 @@ class LeadBlackboard:
     api_cost_usd: float = 0.0
     api_usage: list = field(default_factory=list)
 
-    # Preise in USD pro Token (Stand Mai 2026)
+    # Preise in USD pro Token (Stand Juni 2026, platform.claude.com/docs/en/pricing)
     _COST_PER_TOKEN: dict = field(default_factory=lambda: {
-        "claude-opus-4-6":    {"input": 15.0 / 1_000_000, "output": 75.0 / 1_000_000},
+        "claude-opus-4-6":    {"input":  5.0 / 1_000_000, "output": 25.0 / 1_000_000},
         "claude-sonnet-4-6":  {"input":  3.0 / 1_000_000, "output": 15.0 / 1_000_000},
-        "claude-haiku-4-5":   {"input":  0.8 / 1_000_000, "output":  4.0 / 1_000_000},
+        "claude-haiku-4-5":   {"input":  1.0 / 1_000_000, "output":  5.0 / 1_000_000},
     })
 
     def track_cost(self, agent: str, model: str, input_tokens: int, output_tokens: int) -> None:

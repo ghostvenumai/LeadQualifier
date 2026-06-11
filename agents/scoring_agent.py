@@ -37,6 +37,35 @@ logger = logging.getLogger(__name__)
 # Maximale Rohpunktzahl (Summe aller positiven Kriterien)
 _MAX_RAW_SCORE: int = 14  # 3+2+2+1+1+1+1+1+1+1 = 14
 
+# Erzwungener Tool-Use-Output: garantiert valides JSON statt Freitext-Parsing
+_CRITERIA_KEYS: list[str] = [
+    "decision_maker", "company_size", "industry_fit", "budget_signals",
+    "urgency", "message_quality", "website_quality", "linkedin_presence",
+    "news_activity", "tech_stack_fit", "geo_relevance", "contact_completeness",
+    "is_student_intern", "vague_message",
+]
+
+_SCORE_TOOL: dict = {
+    "name": "submit_score",
+    "description": "Uebermittelt das strukturierte Bewertungs-Ergebnis fuer den Lead.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "criteria": {
+                "type": "object",
+                "properties": {key: {"type": "integer"} for key in _CRITERIA_KEYS},
+                "required": _CRITERIA_KEYS,
+                "additionalProperties": False,
+            },
+            "raw_points": {"type": "integer"},
+            "score": {"type": "integer"},
+            "reasoning": {"type": "string"},
+        },
+        "required": ["criteria", "raw_points", "score", "reasoning"],
+        "additionalProperties": False,
+    },
+}
+
 import core.prompt_manager as _pm
 
 _USER_PROMPT_TEMPLATE = """\
@@ -142,7 +171,11 @@ class ScoringAgent:
         self._blackboard = blackboard
         self._settings = settings
         self._db = db
-        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self._client = anthropic.AsyncAnthropic(
+            api_key=settings.anthropic_api_key,
+            max_retries=settings.anthropic_max_retries,
+            timeout=settings.anthropic_timeout_seconds,
+        )
 
     def _build_user_prompt(self) -> str:
         """
@@ -297,6 +330,28 @@ class ScoringAgent:
         except json.JSONDecodeError as exc:
             raise ValueError(f"Claude-Antwort ist kein valides JSON: {exc}") from exc
 
+    def _extract_payload(self, response: Any) -> dict[str, Any]:
+        """
+        Extrahiert das Bewertungs-Payload aus der Claude-Antwort.
+
+        Bevorzugt den Tool-Use-Block (garantiert schema-valides JSON durch
+        tool_choice). Faellt auf Text-JSON-Parsing zurueck, falls kein
+        Tool-Use-Block vorhanden ist.
+
+        Args:
+            response: Message-Objekt der Claude API.
+
+        Returns:
+            Geparstes Dictionary mit criteria, raw_points, score, reasoning.
+
+        Raises:
+            ValueError: Wenn weder Tool-Use- noch valides JSON gefunden wird.
+        """
+        for block in response.content:
+            if getattr(block, "type", None) == "tool_use":
+                return dict(block.input)
+        return self._parse_claude_response(response.content[0].text)
+
     def _normalize_score(self, raw_points: int) -> int:
         """
         Normalisiert Rohpunkte auf einen Score von 1-10.
@@ -341,6 +396,8 @@ class ScoringAgent:
                 messages=[
                     {"role": "user", "content": user_prompt}
                 ],
+                tools=[_SCORE_TOOL],
+                tool_choice={"type": "tool", "name": "submit_score"},
             )
 
             self._blackboard.track_cost(
@@ -350,8 +407,7 @@ class ScoringAgent:
                 response.usage.output_tokens,
             )
 
-            raw_text: str = response.content[0].text
-            parsed = self._parse_claude_response(raw_text)
+            parsed = self._extract_payload(response)
 
             # Kriterien-Dict extrahieren und validieren
             criteria: dict[str, Any] = parsed.get("criteria", {})

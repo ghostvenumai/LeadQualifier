@@ -24,6 +24,21 @@ logger = logging.getLogger(__name__)
 
 import core.prompt_manager as _pm
 
+# Erzwungener Tool-Use-Output: garantiert valides JSON statt Freitext-Parsing
+_EMAIL_TOOL: dict = {
+    "name": "submit_email",
+    "description": "Uebermittelt den fertigen E-Mail-Entwurf.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "subject": {"type": "string", "description": "Betreffzeile, max 80 Zeichen"},
+            "body": {"type": "string", "description": "Vollstaendiger E-Mail-Body auf Deutsch"},
+        },
+        "required": ["subject", "body"],
+        "additionalProperties": False,
+    },
+}
+
 _QUALIFY_PROMPT_TEMPLATE = """\
 Erstelle eine personalisierte Qualifizierungs-E-Mail fuer den folgenden Lead.
 
@@ -106,7 +121,11 @@ class WriterAgent:
         """
         self._blackboard = blackboard
         self._settings = settings
-        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self._client = anthropic.AsyncAnthropic(
+            api_key=settings.anthropic_api_key,
+            max_retries=settings.anthropic_max_retries,
+            timeout=settings.anthropic_timeout_seconds,
+        )
 
     async def write(self) -> EmailDraft:
         """
@@ -221,6 +240,8 @@ class WriterAgent:
             max_tokens=1000,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
+            tools=[_EMAIL_TOOL],
+            tool_choice={"type": "tool", "name": "submit_email"},
         )
 
         self._blackboard.track_cost(
@@ -230,8 +251,7 @@ class WriterAgent:
             response.usage.output_tokens,
         )
 
-        raw_text = response.content[0].text
-        parsed = self._parse_response(raw_text)
+        parsed = self._extract_payload(response)
 
         subject = parsed.get("subject", "").strip()
         body = parsed.get("body", "").strip()
@@ -245,6 +265,27 @@ class WriterAgent:
             email_type=email_type,
             tone="professional",
         )
+
+    def _extract_payload(self, response: object) -> dict[str, str]:
+        """
+        Extrahiert subject/body aus der Claude-Antwort.
+
+        Bevorzugt den Tool-Use-Block (schema-valides JSON durch tool_choice),
+        faellt auf Text-JSON-Parsing zurueck.
+
+        Args:
+            response: Message-Objekt der Claude API.
+
+        Returns:
+            Dictionary mit "subject" und "body".
+
+        Raises:
+            ValueError: Bei ungueltigem JSON im Text-Fallback.
+        """
+        for block in response.content:
+            if getattr(block, "type", None) == "tool_use":
+                return dict(block.input)
+        return self._parse_response(response.content[0].text)
 
     def _parse_response(self, raw_text: str) -> dict[str, str]:
         """

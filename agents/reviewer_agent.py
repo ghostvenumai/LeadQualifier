@@ -31,6 +31,34 @@ _MAX_WORDS: int = 300
 
 import core.prompt_manager as _pm
 
+# Erzwungener Tool-Use-Output: garantiert valides JSON statt Freitext-Parsing
+_REVIEW_TOOL: dict = {
+    "name": "submit_review",
+    "description": "Uebermittelt das strukturierte Review-Ergebnis.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "passed": {"type": "boolean"},
+            "criteria": {
+                "type": "object",
+                "properties": {
+                    key: {"type": "boolean"}
+                    for key in [
+                        "is_german", "is_professional", "no_grammar_errors",
+                        "contains_company_name", "not_too_long",
+                        "has_clear_cta", "no_placeholders",
+                    ]
+                },
+                "additionalProperties": False,
+            },
+            "feedback": {"type": "string"},
+            "word_count": {"type": "integer"},
+        },
+        "required": ["passed", "feedback"],
+        "additionalProperties": False,
+    },
+}
+
 _REVIEW_PROMPT_TEMPLATE = """\
 Pruefe die folgende E-Mail auf Qualitaet fuer den B2B-Kontext.
 
@@ -116,7 +144,11 @@ class ReviewerAgent:
         self._blackboard = blackboard
         self._settings = settings
         self._writer_agent = writer_agent
-        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self._client = anthropic.AsyncAnthropic(
+            api_key=settings.anthropic_api_key,
+            max_retries=settings.anthropic_max_retries,
+            timeout=settings.anthropic_timeout_seconds,
+        )
 
     async def review(self) -> bool:
         """
@@ -242,21 +274,22 @@ class ReviewerAgent:
             )
 
             response = await self._client.messages.create(
-                model=self._settings.claude_agent_model,
+                model=self._settings.claude_reviewer_model,
                 max_tokens=600,
                 system=_pm.get("reviewer_system"),
                 messages=[{"role": "user", "content": prompt}],
+                tools=[_REVIEW_TOOL],
+                tool_choice={"type": "tool", "name": "submit_review"},
             )
 
             bb.track_cost(
                 "ReviewerAgent",
-                self._settings.claude_agent_model,
+                self._settings.claude_reviewer_model,
                 response.usage.input_tokens,
                 response.usage.output_tokens,
             )
 
-            raw_text = response.content[0].text
-            parsed = self._parse_response(raw_text)
+            parsed = self._extract_payload(response)
 
             passed: bool = bool(parsed.get("passed", False))
             feedback: str = str(parsed.get("feedback", "")).strip()
@@ -288,6 +321,27 @@ class ReviewerAgent:
                 exc,
             )
             return False, f"Review-Parsing fehlgeschlagen: {exc}"
+
+    def _extract_payload(self, response: object) -> dict[str, object]:
+        """
+        Extrahiert das Review-Payload aus der Claude-Antwort.
+
+        Bevorzugt den Tool-Use-Block (schema-valides JSON durch tool_choice),
+        faellt auf Text-JSON-Parsing zurueck.
+
+        Args:
+            response: Message-Objekt der Claude API.
+
+        Returns:
+            Geparstes Dictionary mit passed, criteria, feedback.
+
+        Raises:
+            ValueError: Bei ungueltigem JSON im Text-Fallback.
+        """
+        for block in response.content:
+            if getattr(block, "type", None) == "tool_use":
+                return dict(block.input)
+        return self._parse_response(response.content[0].text)
 
     def _parse_response(self, raw_text: str) -> dict[str, object]:
         """
