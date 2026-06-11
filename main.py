@@ -18,12 +18,14 @@ API-Endpunkte:
 """
 
 import asyncio
+import functools
 import hashlib
 import hmac
 import logging
+import os
 import time
 from collections import defaultdict
-from typing import Any
+from typing import Any, Callable
 
 from flask import Flask, jsonify, render_template, request
 
@@ -115,6 +117,53 @@ def _verify_webhook_signature(payload: bytes, signature_header: str | None) -> b
 def _error(message: str, status: int) -> tuple[Any, int]:
     """Gibt eine einheitliche JSON-Fehlerantwort zurueck."""
     return jsonify({"success": False, "error": message}), status
+
+
+# ---------------------------------------------------------------------------
+# Admin-Authentifizierung fuer Konfigurations-Endpunkte
+# ---------------------------------------------------------------------------
+_LOOPBACK_ADDRESSES = {"127.0.0.1", "::1"}
+
+
+def require_admin(view: Callable) -> Callable:
+    """
+    Schuetzt Admin-Endpunkte (Settings, Prompts) vor unbefugtem Zugriff.
+
+    Ist ADMIN_TOKEN gesetzt, muss der Request den Header
+    'X-Admin-Token: <token>' tragen (Vergleich timing-sicher via
+    hmac.compare_digest). Ohne konfigurierten Token sind die Endpunkte
+    nur von localhost erreichbar - die App lauscht auf 0.0.0.0, daher
+    duerfen Konfigurations-Routen niemals unauthentifiziert ins Netz.
+
+    Args:
+        view: Die zu schuetzende Flask-View-Funktion.
+
+    Returns:
+        Gewrappte View, die bei fehlender Berechtigung 401/403 liefert.
+    """
+    @functools.wraps(view)
+    def wrapper(*args: Any, **kwargs: Any) -> tuple[Any, int]:
+        admin_token = os.getenv("ADMIN_TOKEN") or None
+
+        if admin_token:
+            provided = request.headers.get("X-Admin-Token", "")
+            if not provided or not hmac.compare_digest(provided, admin_token):
+                logger.warning("Admin-Endpunkt: Ungueltiger oder fehlender Admin-Token.")
+                return _error("Nicht autorisiert.", 401)
+            return view(*args, **kwargs)
+
+        # Kein Token konfiguriert: nur localhost zulassen (Fail-Closed nach aussen)
+        if request.remote_addr not in _LOOPBACK_ADDRESSES:
+            logger.warning(
+                "Admin-Endpunkt: Zugriff von %s abgelehnt (kein ADMIN_TOKEN konfiguriert).",
+                request.remote_addr,
+            )
+            return _error(
+                "Nicht autorisiert. ADMIN_TOKEN konfigurieren fuer Remote-Zugriff.", 403
+            )
+        return view(*args, **kwargs)
+
+    return wrapper
 
 
 # In-Memory Lead-Store fuer GUI (wird bei Neustart geleert — DB ist die Quelle)
@@ -336,41 +385,38 @@ def webhook_lead() -> tuple[Any, int]:
 
 
 @app.get("/api/settings/config")
+@require_admin
 def api_settings_config() -> tuple[Any, int]:
     """
-    Gibt maskierte Konfigurationswerte fuer die Settings-UI zurueck.
+    Gibt den Konfigurationsstatus fuer die Settings-UI zurueck.
 
-    Keine echten Secrets werden zurueckgegeben — nur ob ein Wert gesetzt ist
-    und die ersten Zeichen fuer die visuelle Bestaetigung.
+    Es werden KEINE Secret-Inhalte zurueckgegeben - auch keine Praefixe.
+    Fuer jeden Secret-Wert wird nur signalisiert, ob er gesetzt ist.
     """
-    import os
-
-    def mask(value: str | None, show: int = 8) -> str | None:
-        """Maskiert einen Secret-Wert: zeigt nur die ersten `show` Zeichen."""
-        if not value:
-            return None
-        if len(value) <= show:
-            return "*" * len(value)
-        return value[:show] + "…"
+    def status(env_key: str) -> str | None:
+        """Gibt 'konfiguriert ✓' zurueck wenn der Wert gesetzt ist, sonst None."""
+        return "konfiguriert ✓" if os.getenv(env_key) else None
 
     return jsonify({
         "success": True,
         "config": {
-            "anthropic_api_key":    mask(os.getenv("ANTHROPIC_API_KEY")),
-            "slack_webhook_url":    mask(os.getenv("SLACK_WEBHOOK_URL"), 30),
-            "slack_encryption_key": mask(os.getenv("SLACK_ENCRYPTION_KEY")),
-            "gmail_sender_email":   mask(os.getenv("GMAIL_SENDER_EMAIL"), 20),
-            "gmail_app_password":   mask(os.getenv("GMAIL_APP_PASSWORD")),
+            "anthropic_api_key":    status("ANTHROPIC_API_KEY"),
+            "slack_webhook_url":    status("SLACK_WEBHOOK_URL"),
+            "slack_encryption_key": status("SLACK_ENCRYPTION_KEY"),
+            "gmail_sender_email":   status("GMAIL_SENDER_EMAIL"),
+            "gmail_app_password":   status("GMAIL_APP_PASSWORD"),
             "email_override":       os.getenv("EMAIL_OVERRIDE") or None,
-            "crm_webhook_url":      mask(os.getenv("CRM_WEBHOOK_URL"), 30),
-            "webhook_secret":       mask(os.getenv("WEBHOOK_SECRET")),
-            "license_key":          mask(os.getenv("LICENSE_KEY")),
+            "crm_webhook_url":      status("CRM_WEBHOOK_URL"),
+            "webhook_secret":       status("WEBHOOK_SECRET"),
+            "license_key":          status("LICENSE_KEY"),
+            "admin_token":          status("ADMIN_TOKEN"),
             "qualify_threshold":    os.getenv("QUALIFY_THRESHOLD", "7"),
         },
     }), 200
 
 
 @app.post("/api/settings/save")
+@require_admin
 def api_settings_save() -> tuple[Any, int]:
     """
     Speichert neue Konfigurationswerte in die .env-Datei.
@@ -378,7 +424,6 @@ def api_settings_save() -> tuple[Any, int]:
     Erlaubte Keys sind explizit gelistet (Whitelist).
     Leere Strings werden ignoriert (kein Loeschen von Keys ueber die UI).
     """
-    import os
     from dotenv import set_key
 
     _ALLOWED_KEYS: set[str] = {
@@ -391,6 +436,7 @@ def api_settings_save() -> tuple[Any, int]:
         "CRM_WEBHOOK_URL",
         "WEBHOOK_SECRET",
         "LICENSE_KEY",
+        "ADMIN_TOKEN",
         "QUALIFY_THRESHOLD",
     }
 
@@ -458,7 +504,6 @@ def api_feedback() -> tuple[Any, int]:
     try:
         db.save_scoring_feedback(
             lead_id=int(lead_id),
-            predicted_score=0,  # wird aus DB geladen
             actual_outcome=actual_outcome,
         )
     except Exception as exc:
@@ -469,6 +514,7 @@ def api_feedback() -> tuple[Any, int]:
 
 
 @app.get("/api/prompts")
+@require_admin
 def api_prompts_get() -> tuple[Any, int]:
     """Gibt alle konfigurierten Agent-System-Prompts zurueck."""
     from core import prompt_manager as pm
@@ -476,6 +522,7 @@ def api_prompts_get() -> tuple[Any, int]:
 
 
 @app.post("/api/prompts")
+@require_admin
 def api_prompts_save() -> tuple[Any, int]:
     """
     Speichert einen oder mehrere Agent-System-Prompts.
