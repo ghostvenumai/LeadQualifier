@@ -44,3 +44,9 @@ token.pickle
 
 # macOS
 .DS_Store
+
+# Runtime-Konfiguration (vom Prompt-Editor erzeugt, wie .env)
+prompts.json
+
+# Ruff
+.ruff_cache/
